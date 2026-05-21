@@ -86,8 +86,12 @@ export default function Dashboard() {
     },
   });
 
-  const hasCredentials = syncStatus?.hasCredentials ?? false;
-  const staleLeagues = syncStatus?.leagues.filter(l => l.lastAutoSyncError) ?? [];
+  const hasCredentials = syncStatus?.leagues.some(
+    l => l.sport === sport && l.autoSyncEnabled
+  ) ?? false;
+  const staleLeagues = syncStatus?.leagues.filter(
+    l => l.sport === sport && l.lastAutoSyncError
+  ) ?? [];
 
   const handleSyncNow = () => {
     if (hasCredentials) {
