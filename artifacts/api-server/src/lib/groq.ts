@@ -248,31 +248,23 @@ export async function findTrades(
     });
   }
 
+  // Ultra-compact format: keep lines short to stay within Groq payload limit
+  // Tier abbreviations: E=ELITE S=STRONG A=AVERAGE W=WEAK
+  const tierAbbr = (t: string) => t[0] ?? "?";
   const formatPlayer = (p: typeof playersTable.$inferSelect) => {
     const meta = playerRankMap.get(p.id);
-    const pts = p.totalPoints != null ? `${p.totalPoints.toFixed(0)} total pts` : "no pts data";
-    const avg = meta ? `${meta.avgPerGame} pts/game avg` : "";
-    const rank = meta ? `#${meta.rank}/${meta.total} ${normPos(p.position)} in league` : "";
-    const tier = meta ? `[${meta.tier}]` : "";
-    const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus)
-      ? ` ⚠️${p.injuryStatus}` : "";
-    return `  ${p.fullName} (${p.position}, ${p.proTeam}) — ${pts}, ${avg}, ${rank} ${tier}${inj}`;
+    const avg = meta ? `${meta.avgPerGame}ppg` : (p.totalPoints != null ? `${p.totalPoints.toFixed(0)}tot` : "?");
+    const rank = meta ? `#${meta.rank}${normPos(p.position)}[${tierAbbr(meta.tier)}]` : "";
+    const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? `!${p.injuryStatus}` : "";
+    return `${p.fullName}(${p.position}) ${avg} ${rank}${inj}`;
   };
 
-  // ── Fairness calibration math ────────────────────────────────────────────
-  // Value ratio: at fairness F%, you get (100/F) × value for every 1 unit you give
-  // e.g. 25% fairness → receive ~4x what you give; 50% → ~2x; 100% → ~1x
-  const valueRatio = (100 / fairness).toFixed(2);
-  const fairnessInstruction =
-    fairness <= 20
-      ? `HEAVILY LOPSIDED in my favor. For every 1 unit of value I give, I expect to receive at least 4x back. The other team is getting a bad deal — look for their undervalued players I can exploit.`
-      : fairness <= 40
-      ? `LOPSIDED in my favor. For every 1 unit of value I give, I expect to receive ~${valueRatio}x back. The package should clearly favor me.`
-      : fairness <= 60
-      ? `SLIGHT EDGE to me. For every 1 unit of value I give, I expect ~${valueRatio}x back. I should come out a bit ahead.`
-      : fairness <= 80
-      ? `MOSTLY BALANCED with a small edge to me. Value ratio ~${valueRatio}:1 in my favor. Near-equal but I should still win slightly.`
-      : `PERFECTLY FAIR. Equal value both ways (~1:1 ratio). Suggest trades where both sides benefit equally.`;
+  const valueRatio = (100 / fairness).toFixed(1);
+  const fairnessInstr =
+    fairness <= 30 ? `heavily favors me — receive ~${valueRatio}x value back` :
+    fairness <= 55 ? `favors me — receive ~${valueRatio}x value back` :
+    fairness <= 75 ? `slight edge to me — receive ~${valueRatio}x value back` :
+    `fair/equal — receive ~1:1 value`;
 
   const teamRosters: Record<number, typeof playersTable.$inferSelect[]> = {};
   for (const t of opposingTeams) {
@@ -280,63 +272,39 @@ export async function findTrades(
   }
 
   const posFilter = targetPositions && targetPositions.length > 0
-    ? `TARGET POSITIONS: I specifically want to receive players at these positions: ${targetPositions.join(", ")}.`
-    : "";
-  const sizeFilter = packageSize ? `PACKAGE SIZE: Receive at most ${packageSize} player(s) in return.` : "";
+    ? `Want back: ${targetPositions.join(",")}` : "";
+  const sizeFilter = packageSize ? `Max receive: ${packageSize}` : "";
 
-  const offeredTotalPts = offeredPlayers.reduce((sum, p) => sum + (p.totalPoints ?? 0), 0);
   const offeredAvgPts = offeredPlayers.map(p => {
     const meta = playerRankMap.get(p.id);
     return meta ? parseFloat(meta.avgPerGame) : 0;
   }).reduce((a, b) => a + b, 0);
 
-  const prompt = `You are an expert fantasy sports trade analyst. Your job is to find trade packages that match a specific fairness target.
+  // Only include starters for opposing teams, capped at 12 per team to limit payload
+  const oppTeamLines = opposingTeams.map(t => {
+    const starters = (teamRosters[t.id] ?? [])
+      .filter(p => !benchSlots.has(p.position))
+      .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
+      .slice(0, 12);
+    return `[${t.id}]${t.name}(${t.wins}-${t.losses}):\n${starters.map(formatPlayer).join("\n")}`;
+  }).join("\n\n");
 
-SCORING CONTEXT: Season total points and per-game averages are calculated from actual ESPN fantasy scoring. Higher pts/game = more valuable player. Use the league ranking (#X/${allLeaguePlayers.length > 0 ? (byPos[Object.keys(byPos)[0] ?? ""] ?? []).length : "?"}) to assess relative value. Tiers: ELITE > STRONG > AVERAGE > WEAK.
+  const prompt = `Fantasy trade finder. Tiers:E>S>A>W. ppg=pts/game avg(~${estimatedGames} games). Value ratio at ${fairness}% fairness: ${fairnessInstr}.
+${posFilter} ${sizeFilter}
 
-MY TEAM: "${myTeam.name}" (${myTeam.wins}W-${myTeam.losses}L)
-ESTIMATED GAMES PLAYED THIS SEASON: ~${estimatedGames}
+OFFERING(${offeredAvgPts.toFixed(1)}ppg combined):
+${offeredPlayers.map(formatPlayer).join("\n") || "(none)"}
 
-PLAYERS I AM OFFERING (combined: ${offeredTotalPts.toFixed(0)} total pts, ${offeredAvgPts.toFixed(1)} pts/game):
-${offeredPlayers.map(formatPlayer).join("\n") || "  (not specified)"}
+MY ROSTER:
+${myRoster.filter(p => !benchSlots.has(p.position)).map(formatPlayer).join("\n")}
 
-FAIRNESS TARGET: ${fairness}% — ${fairnessInstruction}
-Value ratio to apply: For every 1 point of value I give up, I should receive ~${valueRatio} points of value back.
-${posFilter}
-${sizeFilter}
+OPPOSING TEAMS(starters only):
+${oppTeamLines}
 
-MY FULL ROSTER:
-${myRoster.map(formatPlayer).join("\n")}
-
-OPPOSING TEAMS:
-${opposingTeams.map(t => {
-    const roster = (teamRosters[t.id] ?? []).filter(p => !benchSlots.has(p.position));
-    const bench = (teamRosters[t.id] ?? []).filter(p => benchSlots.has(p.position));
-    return `=== ${t.name} (${t.wins}W-${t.losses}L) [ID:${t.id}] ===\nStarters:\n${roster.map(formatPlayer).join("\n")}\nBench:\n${bench.map(formatPlayer).join("\n") || "  (none)"}`;
-  }).join("\n\n")}
-
-INSTRUCTIONS:
-1. For each opposing team, find the ONE best trade package I can propose that achieves the ${fairness}% fairness target.
-2. Use the pts/game averages and league rankings to calculate actual value — do NOT guess based on real-world reputation alone.
-3. If fairness < 50%, the package MUST favor me. The players I receive should have higher pts/game than what I'm giving up (scaled by the value ratio ${valueRatio}:1).
-4. If fairness > 80%, the packages should be roughly equal in pts/game value.
-5. Consider roster needs — would the other team actually want my offered players?
-6. Skip a team if no reasonable package exists (e.g., they have no players I'd want or our values don't align).
-
-Return ONLY this JSON (no markdown, no extra text):
-{
-  "packages": [
-    {
-      "targetTeamId": <number>,
-      "targetTeamName": "<string>",
-      "record": "<W>-<L>",
-      "playersToReceive": ["<name (pos) — X pts/game avg, #rank pos in league [TIER]>"],
-      "fairnessScore": <estimated actual fairness 0-100 based on pts/game comparison>,
-      "reasoning": "<2 sentences: cite the specific pts/game numbers for both sides and explain why this hits the ${fairness}% target>",
-      "recommendation": "<Send It|Consider|Skip>"
-    }
-  ]
-}`;
+For each team find the best package I can propose at ${fairness}% fairness(${fairnessInstr}).
+Use ppg to judge value. Skip teams with no viable package.
+Return ONLY JSON:
+{"packages":[{"targetTeamId":<n>,"targetTeamName":"<s>","record":"<W-L>","playersToReceive":["<name ppg tier>"],"fairnessScore":<0-100>,"reasoning":"<cite ppg numbers>","recommendation":"<Send It|Consider|Skip>"}]}`;
 
   const promptHash = hashPrompt(prompt);
   const [cached] = await db.select().from(aiCacheTable).where(eq(aiCacheTable.promptHash, promptHash));
