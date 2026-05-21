@@ -133,12 +133,15 @@ function PackageCard({
 
 function calcPpg(
   totalPoints: number | null | undefined,
-  roster: Array<{ totalPoints?: number | null }>
+  estimatedGames: number
 ): string {
   if (totalPoints == null) return "-";
-  const maxPts = Math.max(...roster.map(p => p.totalPoints ?? 0), 1);
-  const estGames = Math.max(1, Math.round(maxPts / 68));
-  return (totalPoints / estGames).toFixed(1);
+  return (totalPoints / estimatedGames).toFixed(1);
+}
+
+function deriveEstGames(rosters: Array<Array<{ totalPoints?: number | null }>>): number {
+  const maxPts = Math.max(...rosters.flatMap(r => r.map(p => p.totalPoints ?? 0)), 1);
+  return Math.max(1, Math.round(maxPts / 68));
 }
 
 export default function TradeLab() {
@@ -182,6 +185,10 @@ export default function TradeLab() {
   // finder queries
   const { data: finderTeams } = useListTeams(finderLeagueId || 0, { query: { enabled: !!finderLeagueId, queryKey: ["listTeams", finderLeagueId] } });
   const { data: myRoster, isLoading: myRosterLoading } = useListTeamPlayers(myTeamId || 0, { query: { enabled: !!myTeamId, queryKey: ["listTeamPlayers", myTeamId] } });
+
+  // Shared estimatedGames per mode — derived from combined rosters so both sides use same denominator
+  const manualEstGames = deriveEstGames([rosterA ?? [], rosterB ?? []]);
+  const finderEstGames = deriveEstGames([myRoster ?? []]);
 
   const handleLeagueChange = (val: string) => {
     setLeagueId(parseInt(val, 10));
@@ -301,7 +308,7 @@ export default function TradeLab() {
                                   <p className="text-sm font-medium truncate">{player.fullName}</p>
                                   <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                                 </div>
-                                <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, rosterA ?? [])} <span className="text-muted-foreground font-normal">ppg</span></div>
+                                <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, manualEstGames)} <span className="text-muted-foreground font-normal">ppg</span></div>
                               </label>
                             ))}
                           </>
@@ -340,7 +347,7 @@ export default function TradeLab() {
                                   <p className="text-sm font-medium truncate">{player.fullName}</p>
                                   <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                                 </div>
-                                <div className="text-xs font-mono text-accent font-bold shrink-0">{calcPpg(player.totalPoints, rosterB ?? [])} <span className="text-muted-foreground font-normal">ppg</span></div>
+                                <div className="text-xs font-mono text-accent font-bold shrink-0">{calcPpg(player.totalPoints, manualEstGames)} <span className="text-muted-foreground font-normal">ppg</span></div>
                               </label>
                             ))}
                           </>
@@ -549,7 +556,7 @@ export default function TradeLab() {
                             <p className="text-sm font-medium truncate">{player.fullName}</p>
                             <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                           </div>
-                          <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, myRoster ?? [])} <span className="text-muted-foreground font-normal">ppg</span></div>
+                          <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, finderEstGames)} <span className="text-muted-foreground font-normal">ppg</span></div>
                         </label>
                       ))
                     ) : myTeamId ? (
