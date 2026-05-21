@@ -103,6 +103,19 @@ export const GetLeagueResponse = zod.object({
 
 
 /**
+ * @summary Delete a league and all its data
+ */
+export const DeleteLeagueParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLeagueResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary List teams in a league
  */
 export const ListTeamsParams = zod.object({

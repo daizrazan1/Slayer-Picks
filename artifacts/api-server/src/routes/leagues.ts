@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   GetLeagueParams,
   GetLeagueResponse,
@@ -36,6 +36,27 @@ router.get("/leagues/:id", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetLeagueResponse.parse(league));
+});
+
+router.delete("/leagues/:id", async (req, res): Promise<void> => {
+  const params = GetLeagueParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [league] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, params.data.id));
+  if (!league) {
+    res.status(404).json({ error: "League not found" });
+    return;
+  }
+  const teams = await db.select({ id: teamsTable.id }).from(teamsTable).where(eq(teamsTable.leagueId, league.id));
+  const teamIds = teams.map(t => t.id);
+  if (teamIds.length > 0) {
+    await db.delete(playersTable).where(inArray(playersTable.teamId, teamIds));
+  }
+  await db.delete(teamsTable).where(eq(teamsTable.leagueId, league.id));
+  await db.delete(leaguesTable).where(eq(leaguesTable.id, league.id));
+  res.json({ success: true, message: "League deleted" });
 });
 
 router.get("/leagues/:leagueId/teams", async (req, res): Promise<void> => {

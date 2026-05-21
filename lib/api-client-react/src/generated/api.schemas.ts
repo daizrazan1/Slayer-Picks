@@ -164,6 +164,11 @@ export interface TeamInsightsResult {
   cached: boolean;
 }
 
+export interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface DashboardSummary {
   leagueCount: number;
   teamCount: number;

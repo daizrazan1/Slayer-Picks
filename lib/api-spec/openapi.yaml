@@ -141,6 +141,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteLeague
+      tags: [leagues]
+      summary: Delete a league and all its data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: League deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /leagues/{leagueId}/teams:
     get:
@@ -629,6 +652,15 @@ components:
           type: ["integer", "null"]
         cached:
           type: boolean
+
+    SuccessResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
 
     DashboardSummary:
       type: object

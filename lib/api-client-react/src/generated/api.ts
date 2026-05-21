@@ -30,6 +30,7 @@ import type {
   ListLeaguesParams,
   ListPlayersParams,
   Player,
+  SuccessResponse,
   SyncRefreshResult,
   SyncResult,
   SyncStatus,
@@ -508,6 +509,76 @@ export function useGetLeague<TData = Awaited<ReturnType<typeof getLeague>>, TErr
 
 
 
+
+export const getDeleteLeagueUrl = (id: number,) => {
+
+
+
+
+  return `/api/leagues/${id}`
+}
+
+/**
+ * @summary Delete a league and all its data
+ */
+export const deleteLeague = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteLeagueUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteLeagueMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLeague>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLeague>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteLeague'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLeague>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteLeague(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLeagueMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLeague>>>
+
+    export type DeleteLeagueMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a league and all its data
+ */
+export const useDeleteLeague = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLeague>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLeague>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteLeagueMutationOptions(options));
+    }
 
 export const getListTeamsUrl = (leagueId: number,) => {
 

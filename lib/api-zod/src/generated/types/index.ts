@@ -18,6 +18,7 @@ export * from './leagueSyncStatus';
 export * from './listLeaguesParams';
 export * from './listPlayersParams';
 export * from './player';
+export * from './successResponse';
 export * from './syncRefreshResult';
 export * from './syncResult';
 export * from './syncStatus';
