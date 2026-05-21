@@ -167,15 +167,17 @@ export default function Dashboard() {
             )}
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="uppercase font-bold tracking-wide gap-2"
-          disabled={syncing}
-          onClick={handleSyncNow}
-        >
-          <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-          {syncing ? "Syncing…" : "Sync Now"}
-        </Button>
+        {hasCredentials && (
+          <Button
+            variant="outline"
+            className="uppercase font-bold tracking-wide gap-2"
+            disabled={syncing}
+            onClick={handleSyncNow}
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing…" : "Sync Now"}
+          </Button>
+        )}
       </div>
 
       {/* ── Stat cards ── */}

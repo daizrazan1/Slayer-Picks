@@ -274,9 +274,9 @@ async function fetchEspnLeagues(
 
   if (has401) {
     throw new Error(
-      `League ID ${leagueId} exists on ESPN but your account isn't a member of it. ` +
-        `Make sure you're using the ${sportHint} league ID, not a different sport's league ID. ` +
-        `You can find it in the URL when you open that league on fantasy.espn.com.`
+      `ESPN is blocking server-side requests for league ${leagueId} (${sportHint}). ` +
+        `This is an ESPN restriction — some leagues only allow browser-based access. ` +
+        `Use the bookmarklet to sync this league instead.`
     );
   }
 
