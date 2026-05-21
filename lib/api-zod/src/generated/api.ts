@@ -40,6 +40,10 @@ export const SyncEspnResponse = zod.object({
 /**
  * @summary List all leagues
  */
+export const ListLeaguesQueryParams = zod.object({
+  "sport": zod.coerce.string().optional()
+})
+
 export const ListLeaguesResponseItem = zod.object({
   "id": zod.number(),
   "espnLeagueId": zod.string(),
@@ -188,6 +192,10 @@ export const EvaluateTradeResponse = zod.object({
  * Returns counts, last sync time, top players, and league overview
  * @summary Get dashboard summary stats
  */
+export const GetDashboardSummaryQueryParams = zod.object({
+  "sport": zod.coerce.string().optional()
+})
+
 export const GetDashboardSummaryResponse = zod.object({
   "leagueCount": zod.number(),
   "teamCount": zod.number(),

@@ -127,7 +127,7 @@ async function processEspnData(
           position: getPositionName(entry.lineupSlotId ?? 0, sport),
           proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
           projectedPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
-          avgPoints: entry.playerPoolEntry?.averageDraftPosition ?? null,
+          avgPoints: null, // ESPN doesn't expose per-game avg in this view
           totalPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
           injuryStatus: player.injuryStatus ?? null,
         };

@@ -16,8 +16,11 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/leagues", async (_req, res): Promise<void> => {
-  const leagues = await db.select().from(leaguesTable).orderBy(leaguesTable.createdAt);
+router.get("/leagues", async (req, res): Promise<void> => {
+  const sport = typeof req.query.sport === "string" ? req.query.sport : undefined;
+  const leagues = await (sport
+    ? db.select().from(leaguesTable).where(eq(leaguesTable.sport, sport)).orderBy(leaguesTable.createdAt)
+    : db.select().from(leaguesTable).orderBy(leaguesTable.createdAt));
   res.json(ListLeaguesResponse.parse(leagues));
 });
 

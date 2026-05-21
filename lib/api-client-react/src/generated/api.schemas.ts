@@ -122,8 +122,16 @@ export interface DashboardSummary {
   topPlayers?: Player[];
 }
 
+export type ListLeaguesParams = {
+sport?: string;
+};
+
 export type ListPlayersParams = {
 leagueId?: number;
 position?: string;
+};
+
+export type GetDashboardSummaryParams = {
+sport?: string;
 };
 

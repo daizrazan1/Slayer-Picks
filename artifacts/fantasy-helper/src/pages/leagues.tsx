@@ -4,9 +4,12 @@ import { useListLeagues } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, ChevronRight } from "lucide-react";
+import { useSport, SPORTS } from "@/contexts/sport-context";
 
 export default function Leagues() {
-  const { data: leagues, isLoading } = useListLeagues();
+  const { sport } = useSport();
+  const sportLabel = SPORTS.find(s => s.value === sport)?.label ?? sport;
+  const { data: leagues, isLoading } = useListLeagues({ sport });
 
   if (isLoading) {
     return (
@@ -35,8 +38,8 @@ export default function Leagues() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight uppercase">Your Leagues</h1>
-        <p className="text-muted-foreground mt-2">Manage and view rosters for all your synced ESPN leagues.</p>
+        <h1 className="text-3xl font-bold tracking-tight uppercase">Your {sportLabel} Leagues</h1>
+        <p className="text-muted-foreground mt-2">Manage and view rosters for all your synced ESPN {sportLabel.toLowerCase()} leagues.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

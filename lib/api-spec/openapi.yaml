@@ -69,6 +69,12 @@ paths:
       operationId: listLeagues
       tags: [leagues]
       summary: List all leagues
+      parameters:
+        - name: sport
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: List of leagues
@@ -235,6 +241,12 @@ paths:
       tags: [dashboard]
       summary: Get dashboard summary stats
       description: Returns counts, last sync time, top players, and league overview
+      parameters:
+        - name: sport
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Dashboard summary

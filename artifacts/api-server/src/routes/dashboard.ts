@@ -1,18 +1,35 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable, aiCacheTable } from "@workspace/db";
-import { desc } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { GetDashboardSummaryResponse, ListRecentTradesResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
-  const [leagues, teams, players, tradeEvals] = await Promise.all([
-    db.select().from(leaguesTable),
-    db.select().from(teamsTable),
-    db.select().from(playersTable).orderBy(desc(playersTable.avgPoints)).limit(5),
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const sport = typeof req.query.sport === "string" ? req.query.sport : undefined;
+
+  const leagues = await (sport
+    ? db.select().from(leaguesTable).where(eq(leaguesTable.sport, sport))
+    : db.select().from(leaguesTable));
+
+  const leagueIds = leagues.map(l => l.id);
+
+  const [teams, tradeEvals] = await Promise.all([
+    leagueIds.length > 0
+      ? db.select().from(teamsTable).where(inArray(teamsTable.leagueId, leagueIds))
+      : Promise.resolve([]),
     db.select().from(aiCacheTable),
   ]);
+
+  const teamIds = teams.map(t => t.id);
+
+  const topPlayers = teamIds.length > 0
+    ? await db.select().from(playersTable)
+        .where(inArray(playersTable.teamId, teamIds))
+        .orderBy(desc(playersTable.totalPoints))
+        .limit(5)
+    : [];
 
   const lastSyncAt = leagues.length > 0
     ? leagues.sort((a, b) => b.syncedAt.getTime() - a.syncedAt.getTime())[0]!.syncedAt.toISOString()
@@ -21,10 +38,12 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const summary = GetDashboardSummaryResponse.parse({
     leagueCount: leagues.length,
     teamCount: teams.length,
-    playerCount: players.length,
+    playerCount: teamIds.length > 0
+      ? (await db.select().from(playersTable).where(inArray(playersTable.teamId, teamIds))).length
+      : 0,
     tradeEvalCount: tradeEvals.length,
     lastSyncAt,
-    topPlayers: players,
+    topPlayers,
   });
 
   res.json(summary);

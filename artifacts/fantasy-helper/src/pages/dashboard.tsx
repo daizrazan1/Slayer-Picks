@@ -1,13 +1,16 @@
 import React from "react";
 import { Link } from "wouter";
-import { useGetDashboardSummary, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useGetDashboardSummary } from "@workspace/api-client-react";
+import { useSport, SPORTS } from "@/contexts/sport-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Trophy, Activity, ArrowRightLeft, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
-  const { data: summary, isLoading } = useGetDashboardSummary();
+  const { sport } = useSport();
+  const sportLabel = SPORTS.find(s => s.value === sport)?.label ?? sport;
+  const { data: summary, isLoading } = useGetDashboardSummary({ sport });
 
   if (isLoading) {
     return (
@@ -45,7 +48,7 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight uppercase">Command Center</h1>
+          <h1 className="text-3xl font-bold tracking-tight uppercase">{sportLabel} Command Center</h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             <Clock className="w-4 h-4" />
             Last synced: {summary.lastSyncAt ? new Date(summary.lastSyncAt).toLocaleString() : "Never"}
