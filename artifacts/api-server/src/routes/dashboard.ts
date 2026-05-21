@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable, aiCacheTable } from "@workspace/db";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { GetDashboardSummaryResponse, ListRecentTradesResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -77,6 +77,25 @@ router.get("/dashboard/recent-trades", async (_req, res): Promise<void> => {
   });
 
   res.json(ListRecentTradesResponse.parse(mapped));
+});
+
+router.delete("/dashboard/recent-trades/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const deleted = await db.delete(aiCacheTable).where(eq(aiCacheTable.id, id)).returning();
+  if (deleted.length === 0) {
+    res.status(404).json({ error: "Trade not found" });
+    return;
+  }
+  res.json({ success: true, deleted: deleted.length });
+});
+
+router.delete("/dashboard/recent-trades", async (_req, res): Promise<void> => {
+  const result = await db.delete(aiCacheTable).returning({ id: aiCacheTable.id });
+  res.json({ success: true, deleted: result.length });
 });
 
 export default router;

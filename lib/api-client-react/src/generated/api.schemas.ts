@@ -112,6 +112,11 @@ export interface TradeEvalResult {
   evaluatedAt?: string | null;
 }
 
+export interface DeleteResult {
+  success: boolean;
+  deleted: number;
+}
+
 export interface InsightTip {
   /** trade, waiver, lineup, or general */
   type: string;

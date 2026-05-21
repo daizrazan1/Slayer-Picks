@@ -1,12 +1,20 @@
 import React from "react";
 import { Link } from "wouter";
-import { useGetDashboardSummary, useListRecentTrades } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetDashboardSummary,
+  useListRecentTrades,
+  useDeleteTrade,
+  useClearAllTrades,
+  getListRecentTradesQueryKey,
+  getGetDashboardSummaryQueryKey,
+} from "@workspace/api-client-react";
 import { useSport, SPORTS } from "@/contexts/sport-context";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Users, Trophy, Activity, ArrowRightLeft, Clock } from "lucide-react";
+import { Users, Trophy, Activity, ArrowRightLeft, Clock, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function timeAgo(iso: string | null | undefined): string {
@@ -29,8 +37,22 @@ const REC_BADGE: Record<string, string> = {
 export default function Dashboard() {
   const { sport } = useSport();
   const sportLabel = SPORTS.find(s => s.value === sport)?.label ?? sport;
+  const qc = useQueryClient();
   const { data: summary, isLoading } = useGetDashboardSummary({ sport });
   const { data: recentTrades, isLoading: tradesLoading } = useListRecentTrades();
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListRecentTradesQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ sport }) });
+  };
+
+  const { mutate: deleteTrade, isPending: deleting } = useDeleteTrade({
+    mutation: { onSuccess: invalidate },
+  });
+
+  const { mutate: clearAll, isPending: clearing } = useClearAllTrades({
+    mutation: { onSuccess: invalidate },
+  });
 
   if (isLoading) {
     return (
@@ -147,9 +169,23 @@ export default function Dashboard() {
 
         {/* Recent Trades */}
         <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="uppercase tracking-wide">Recent Trades</CardTitle>
-            <CardDescription>Your latest AI-evaluated trade proposals</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle className="uppercase tracking-wide">Recent Trades</CardTitle>
+              <CardDescription>Your latest AI-evaluated trade proposals</CardDescription>
+            </div>
+            {recentTrades && recentTrades.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-muted-foreground hover:text-destructive gap-1.5 mt-0.5"
+                disabled={clearing || deleting}
+                onClick={() => clearAll()}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear All
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {tradesLoading ? (
@@ -159,9 +195,19 @@ export default function Dashboard() {
             ) : recentTrades && recentTrades.length > 0 ? (
               <div className="space-y-3">
                 {recentTrades.slice(0, 5).map((trade) => (
-                  <div key={trade.id} className="p-3 rounded-lg border border-border bg-background space-y-2">
-                    {/* Teams + recommendation */}
-                    <div className="flex items-center gap-2">
+                  <div key={trade.id} className="relative p-3 rounded-lg border border-border bg-background space-y-2">
+                    {/* Delete (X) button */}
+                    <button
+                      aria-label="Delete trade"
+                      disabled={deleting || clearing}
+                      onClick={() => trade.id != null && deleteTrade({ id: trade.id })}
+                      className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+
+                    {/* Teams */}
+                    <div className="flex items-center gap-2 pr-6">
                       <span className="font-bold text-sm truncate flex-1">{trade.teamAName ?? "Team A"}</span>
                       <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                       <span className="font-bold text-sm truncate flex-1 text-right">{trade.teamBName ?? "Team B"}</span>

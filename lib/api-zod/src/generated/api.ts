@@ -258,3 +258,25 @@ export const ListRecentTradesResponseItem = zod.object({
 export const ListRecentTradesResponse = zod.array(ListRecentTradesResponseItem)
 
 
+/**
+ * @summary Delete all trade evaluations
+ */
+export const ClearAllTradesResponse = zod.object({
+  "success": zod.boolean(),
+  "deleted": zod.number()
+})
+
+
+/**
+ * @summary Delete a single trade evaluation by ID
+ */
+export const DeleteTradeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteTradeResponse = zod.object({
+  "success": zod.boolean(),
+  "deleted": zod.number()
+})
+
+

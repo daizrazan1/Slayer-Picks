@@ -21,6 +21,7 @@ import type {
 
 import type {
   DashboardSummary,
+  DeleteResult,
   ErrorResponse,
   EspnSyncInput,
   GetDashboardSummaryParams,
@@ -985,4 +986,144 @@ export function useListRecentTrades<TData = Awaited<ReturnType<typeof listRecent
 
 
 
+
+export const getClearAllTradesUrl = () => {
+
+
+
+
+  return `/api/dashboard/recent-trades`
+}
+
+/**
+ * @summary Delete all trade evaluations
+ */
+export const clearAllTrades = async ( options?: RequestInit): Promise<DeleteResult> => {
+
+  return customFetch<DeleteResult>(getClearAllTradesUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getClearAllTradesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearAllTrades>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearAllTrades>>, TError,void, TContext> => {
+
+const mutationKey = ['clearAllTrades'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearAllTrades>>, void> = () => {
+
+
+          return  clearAllTrades(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearAllTradesMutationResult = NonNullable<Awaited<ReturnType<typeof clearAllTrades>>>
+
+    export type ClearAllTradesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete all trade evaluations
+ */
+export const useClearAllTrades = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearAllTrades>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearAllTrades>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearAllTradesMutationOptions(options));
+    }
+
+export const getDeleteTradeUrl = (id: number,) => {
+
+
+
+
+  return `/api/dashboard/recent-trades/${id}`
+}
+
+/**
+ * @summary Delete a single trade evaluation by ID
+ */
+export const deleteTrade = async (id: number, options?: RequestInit): Promise<DeleteResult> => {
+
+  return customFetch<DeleteResult>(getDeleteTradeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTradeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrade>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTrade>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteTrade'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTrade>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTrade(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTradeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTrade>>>
+
+    export type DeleteTradeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a single trade evaluation by ID
+ */
+export const useDeleteTrade = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTrade>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTrade>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteTradeMutationOptions(options));
+    }
 

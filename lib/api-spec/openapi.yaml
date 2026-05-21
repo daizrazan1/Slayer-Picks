@@ -301,6 +301,42 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TradeEvalResult"
+    delete:
+      operationId: clearAllTrades
+      tags: [dashboard]
+      summary: Delete all trade evaluations
+      responses:
+        "200":
+          description: All trades deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+
+  /dashboard/recent-trades/{id}:
+    delete:
+      operationId: deleteTrade
+      tags: [dashboard]
+      summary: Delete a single trade evaluation by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trade deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResult"
+        "404":
+          description: Trade not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -469,6 +505,15 @@ components:
         evaluatedAt:
           type: ["string", "null"]
           format: date-time
+
+    DeleteResult:
+      type: object
+      required: [success, deleted]
+      properties:
+        success:
+          type: boolean
+        deleted:
+          type: integer
 
     InsightTip:
       type: object

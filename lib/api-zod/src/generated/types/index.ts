@@ -7,6 +7,7 @@
  */
 
 export * from './dashboardSummary';
+export * from './deleteResult';
 export * from './errorResponse';
 export * from './espnSyncInput';
 export * from './getDashboardSummaryParams';
