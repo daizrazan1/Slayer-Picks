@@ -90,26 +90,38 @@ export async function evaluateTrade(
     ? await db.select().from(playersTable).where(inArray(playersTable.id, teamBPlayerIds))
     : [];
 
-  const formatPlayer = (p: typeof playersTable.$inferSelect) =>
-    `${p.fullName} (${p.position}, ${p.proTeam}) - Avg: ${p.avgPoints ?? "N/A"} pts, Proj: ${p.projectedPoints ?? "N/A"} pts${p.injuryStatus ? `, Status: ${p.injuryStatus}` : ""}`;
+  // totalPoints is the only reliable stat we store; avgPoints/projectedPoints are null
+  const formatPlayer = (p: typeof playersTable.$inferSelect) => {
+    const pts = p.totalPoints != null ? `${p.totalPoints.toFixed(0)} season pts` : "no pts data";
+    const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? ` [${p.injuryStatus}]` : "";
+    return `  • ${p.fullName} (${p.position}, ${p.proTeam}) — ${pts}${inj}`;
+  };
 
-  const prompt = `Evaluate this fantasy sports trade and return ONLY valid JSON.
+  // Roster context: just names+positions so the AI understands each team's needs
+  // Do NOT include this in the trade players to avoid AI confusing roster with trade
+  const rosterContext = (players: typeof allTeamAPlayers, tradingIds: number[]) =>
+    players.filter(p => !tradingIds.includes(p.id)).map(p => `${p.fullName}(${p.position})`).join(", ") || "none";
 
-Team A: "${teamA.name}" (${teamA.wins}-${teamA.losses}) gives up:
-${givingUpA.map(formatPlayer).join("\n") || "Nothing"}
+  const prompt = `Evaluate ONLY the players listed below in this fantasy sports trade. Do NOT mention or analyze any players not explicitly listed under "GIVES UP".
 
-Team B: "${teamB.name}" (${teamB.wins}-${teamB.losses}) gives up:
-${givingUpB.map(formatPlayer).join("\n") || "Nothing"}
+TRADE:
+Team A "${teamA.name}" (${teamA.wins}-${teamA.losses}) GIVES UP:
+${givingUpA.map(formatPlayer).join("\n") || "  (none)"}
 
-Team A full roster: ${allTeamAPlayers.map(p => `${p.fullName} (${p.position})`).join(", ")}
-Team B full roster: ${allTeamBPlayers.map(p => `${p.fullName} (${p.position})`).join(", ")}
+Team B "${teamB.name}" (${teamB.wins}-${teamB.losses}) GIVES UP:
+${givingUpB.map(formatPlayer).join("\n") || "  (none)"}
 
+Context (roster kept after trade — for needs assessment only, do NOT discuss these players in analysis):
+Team A keeps: ${rosterContext(allTeamAPlayers, teamAPlayerIds)}
+Team B keeps: ${rosterContext(allTeamBPlayers, teamBPlayerIds)}
+
+Base your analysis ONLY on the season points totals of the listed trade players. Higher season pts = more valuable.
 Return ONLY this JSON (no markdown, no extra text):
 {
-  "winScoreA": <0-100, how much Team A wins from this trade>,
-  "winScoreB": <0-100, how much Team B wins from this trade>,
-  "analysis": "<2-3 sentence analysis of the trade value and impact>",
-  "recommendation": "<Accept|Decline|Neutral>"
+  "winScoreA": <0-100, how much Team A benefits from this trade>,
+  "winScoreB": <0-100, how much Team B benefits from this trade>,
+  "analysis": "<2-3 sentences analyzing only the traded players by name and their season pts, explaining who wins and why>",
+  "recommendation": "<Accept|Decline|Neutral> (from Team A's perspective)"
 }`;
 
   const promptHash = hashPrompt(prompt);
