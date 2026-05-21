@@ -134,7 +134,7 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
             proTeam: getProTeamAbbrev(player.proTeamId ?? 0, detectedSport),
             projectedPoints: null,
             avgPoints: null,
-            totalPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
+            totalPoints: getSeasonTotal(player.stats) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
             injuryStatus: player.injuryStatus ?? null,
           };
 
@@ -325,6 +325,13 @@ interface EspnTeamData {
   roster?: { entries?: EspnRosterEntry[] };
 }
 
+interface EspnStatEntry {
+  appliedTotal?: number;
+  scoringPeriodId?: number;
+  seasonId?: number;
+  statSplitTypeId?: number;
+}
+
 interface EspnRosterEntry {
   lineupSlotId?: number;
   playerPoolEntry?: {
@@ -335,8 +342,16 @@ interface EspnRosterEntry {
       fullName?: string;
       proTeamId?: number;
       injuryStatus?: string;
+      stats?: EspnStatEntry[];
     };
   };
+}
+
+/** Returns the full-season fantasy total (statSplitTypeId=0) from the player's stats array. */
+function getSeasonTotal(stats?: EspnStatEntry[]): number | null {
+  if (!stats || stats.length === 0) return null;
+  const entry = stats.find(s => s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
+  return entry?.appliedTotal ?? null;
 }
 
 function getPositionName(slotId: number, sport: string): string {

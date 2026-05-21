@@ -126,9 +126,9 @@ async function processEspnData(
           fullName: player.fullName ?? `Player ${player.id}`,
           position: getPositionName(entry.lineupSlotId ?? 0, sport),
           proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
-          projectedPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
-          avgPoints: null, // ESPN doesn't expose per-game avg in this view
-          totalPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
+          projectedPoints: null,
+          avgPoints: null,
+          totalPoints: getSeasonTotal(player.stats) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
           injuryStatus: player.injuryStatus ?? null,
         };
       })
@@ -160,6 +160,13 @@ interface EspnTeamData {
   roster?: { entries?: EspnRosterEntry[] };
 }
 
+interface EspnStatEntry {
+  appliedTotal?: number;
+  scoringPeriodId?: number;
+  seasonId?: number;
+  statSplitTypeId?: number;
+}
+
 interface EspnRosterEntry {
   lineupSlotId?: number;
   playerPoolEntry?: {
@@ -170,8 +177,15 @@ interface EspnRosterEntry {
       fullName?: string;
       proTeamId?: number;
       injuryStatus?: string;
+      stats?: EspnStatEntry[];
     };
   };
+}
+
+function getSeasonTotal(stats?: EspnStatEntry[]): number | null {
+  if (!stats || stats.length === 0) return null;
+  const entry = stats.find(s => s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
+  return entry?.appliedTotal ?? null;
 }
 
 function getPositionName(slotId: number, sport: string): string {
