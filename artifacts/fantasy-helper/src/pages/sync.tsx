@@ -93,7 +93,7 @@ export default function Sync() {
         onError: (error) => {
           toast({
             title: "Sync Failed",
-            description: (error as { error?: string }).error ?? "An unknown error occurred.",
+            description: (error as Error).message ?? "An unknown error occurred.",
             variant: "destructive",
           });
         },
@@ -229,7 +229,7 @@ export default function Sync() {
                 />
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Info className="w-3 h-3" />
-                  In your ESPN league URL: fantasy.espn.com/[sport]/league?leagueId=XXXXX
+                  Each sport has its own league ID — find it in the URL when you're on that league's page: fantasy.espn.com/baseball/league?leagueId=<strong>XXXXX</strong>
                 </p>
               </div>
 
@@ -271,7 +271,7 @@ export default function Sync() {
                 <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded flex items-start gap-2 text-destructive text-sm">
                   <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span data-testid="text-sync-error">
-                    {(syncMutation.error as { error?: string })?.error ?? "Failed to sync. Try the bookmarklet instead."}
+                    {(syncMutation.error as Error)?.message ?? "Failed to sync. Try the bookmarklet instead."}
                   </span>
                 </div>
               )}
