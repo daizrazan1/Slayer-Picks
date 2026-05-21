@@ -1,1 +1,1 @@
-# Slayer-Picks
+Hey there! Slayer Picks is for espn fanatsy sport loverrs. from football, basketball and baseball. this app helps you manage your teams by having start/sit tools and a trade evaluater and trade finder.
