@@ -37,7 +37,9 @@ import type {
   Team,
   TeamInsightsResult,
   TradeEvalInput,
-  TradeEvalResult
+  TradeEvalResult,
+  TradeFindInput,
+  TradeFindResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -965,6 +967,78 @@ export const useEvaluateTrade = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getEvaluateTradeMutationOptions(options));
+    }
+
+export const getFindTradesUrl = () => {
+
+
+
+
+  return `/api/trade/find`
+}
+
+/**
+ * Scans all opposing teams and suggests trade packages matching the desired fairness level
+ * @summary AI Trade Finder
+ */
+export const findTrades = async (tradeFindInput: TradeFindInput, options?: RequestInit): Promise<TradeFindResult> => {
+
+  return customFetch<TradeFindResult>(getFindTradesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      tradeFindInput,)
+  }
+);}
+
+
+
+
+export const getFindTradesMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof findTrades>>, TError,{data: BodyType<TradeFindInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof findTrades>>, TError,{data: BodyType<TradeFindInput>}, TContext> => {
+
+const mutationKey = ['findTrades'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof findTrades>>, {data: BodyType<TradeFindInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  findTrades(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FindTradesMutationResult = NonNullable<Awaited<ReturnType<typeof findTrades>>>
+    export type FindTradesMutationBody = BodyType<TradeFindInput>
+    export type FindTradesMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary AI Trade Finder
+ */
+export const useFindTrades = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof findTrades>>, TError,{data: BodyType<TradeFindInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof findTrades>>,
+        TError,
+        {data: BodyType<TradeFindInput>},
+        TContext
+      > => {
+      return useMutation(getFindTradesMutationOptions(options));
     }
 
 export const getGetTeamInsightsUrl = (teamId: number,) => {

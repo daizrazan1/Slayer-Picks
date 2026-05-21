@@ -83,6 +83,46 @@ export interface Player {
   injuryStatus?: string | null;
 }
 
+export interface TradeFindInput {
+  leagueId: number;
+  myTeamId: number;
+  /** Player IDs I am offering */
+  offeredPlayerIds: number[];
+  /**
+     * Desired trade fairness: 1=heavily favors me, 100=perfectly equal
+     * @minimum 1
+     * @maximum 100
+     */
+  fairness: number;
+  /** Optional positions to target (e.g. QB, RB, WR) */
+  targetPositions?: string[];
+  /**
+     * Max number of players to receive in a package
+     * @minimum 1
+     * @maximum 3
+     */
+  packageSize?: number;
+}
+
+export interface TradePackage {
+  targetTeamId: number;
+  targetTeamName: string;
+  record: string;
+  /** Player names/details to request back */
+  playersToReceive: string[];
+  /** Estimated fairness 0-100 */
+  fairnessScore: number;
+  reasoning: string;
+  /** Send It, Consider, or Skip */
+  recommendation: string;
+}
+
+export interface TradeFindResult {
+  myTeamName: string;
+  packages: TradePackage[];
+  cached: boolean;
+}
+
 export interface TradeEvalInput {
   teamAId: number;
   teamBId: number;

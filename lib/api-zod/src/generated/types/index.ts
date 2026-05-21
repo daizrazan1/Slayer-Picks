@@ -26,3 +26,6 @@ export * from './team';
 export * from './teamInsightsResult';
 export * from './tradeEvalInput';
 export * from './tradeEvalResult';
+export * from './tradeFindInput';
+export * from './tradeFindResult';
+export * from './tradePackage';

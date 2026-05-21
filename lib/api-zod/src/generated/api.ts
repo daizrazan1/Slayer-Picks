@@ -230,6 +230,40 @@ export const EvaluateTradeResponse = zod.object({
 
 
 /**
+ * Scans all opposing teams and suggests trade packages matching the desired fairness level
+ * @summary AI Trade Finder
+ */
+export const findTradesBodyFairnessMax = 100;
+
+export const findTradesBodyPackageSizeMax = 3;
+
+
+
+export const FindTradesBody = zod.object({
+  "leagueId": zod.number(),
+  "myTeamId": zod.number(),
+  "offeredPlayerIds": zod.array(zod.number()).describe('Player IDs I am offering'),
+  "fairness": zod.number().min(1).max(findTradesBodyFairnessMax).describe('Desired trade fairness: 1=heavily favors me, 100=perfectly equal'),
+  "targetPositions": zod.array(zod.string()).optional().describe('Optional positions to target (e.g. QB, RB, WR)'),
+  "packageSize": zod.number().min(1).max(findTradesBodyPackageSizeMax).optional().describe('Max number of players to receive in a package')
+})
+
+export const FindTradesResponse = zod.object({
+  "myTeamName": zod.string(),
+  "packages": zod.array(zod.object({
+  "targetTeamId": zod.number(),
+  "targetTeamName": zod.string(),
+  "record": zod.string(),
+  "playersToReceive": zod.array(zod.string()).describe('Player names\/details to request back'),
+  "fairnessScore": zod.number().describe('Estimated fairness 0-100'),
+  "reasoning": zod.string(),
+  "recommendation": zod.string().describe('Send It, Consider, or Skip')
+})),
+  "cached": zod.boolean()
+})
+
+
+/**
  * Generates AI-powered roster tips, trade suggestions, and waiver advice based on standings and player data
  * @summary AI insights and tips for a team
  */

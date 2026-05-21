@@ -166,7 +166,149 @@ Return ONLY this JSON (no markdown, no extra text):
   };
 }
 
-// ── Team Insights ────────────────────────────────────────────────────────────
+// ── Trade Finder ─────────────────────────────────────────────────────────────
+
+export interface TradePackage {
+  targetTeamId: number;
+  targetTeamName: string;
+  record: string;
+  playersToReceive: string[];
+  fairnessScore: number;
+  reasoning: string;
+  recommendation: string;
+}
+
+export interface TradeFindResult {
+  myTeamName: string;
+  packages: TradePackage[];
+  cached: boolean;
+}
+
+export async function findTrades(
+  leagueId: number,
+  myTeamId: number,
+  offeredPlayerIds: number[],
+  fairness: number,
+  targetPositions?: string[],
+  packageSize?: number
+): Promise<TradeFindResult> {
+  const [myTeam] = await db.select().from(teamsTable).where(eq(teamsTable.id, myTeamId));
+  if (!myTeam) throw new Error("Your team not found");
+
+  const allTeams = await db.select().from(teamsTable).where(eq(teamsTable.leagueId, leagueId));
+  const opposingTeams = allTeams.filter(t => t.id !== myTeamId);
+
+  const myRoster = await db.select().from(playersTable).where(eq(playersTable.teamId, myTeamId));
+  const offeredPlayers = offeredPlayerIds.length > 0
+    ? myRoster.filter(p => offeredPlayerIds.includes(p.id))
+    : [];
+
+  const formatPlayer = (p: typeof playersTable.$inferSelect) => {
+    const pts = p.totalPoints != null ? ` [${p.totalPoints.toFixed(0)} pts]` : "";
+    const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? ` ⚠${p.injuryStatus}` : "";
+    return `${p.fullName} (${p.position}, ${p.proTeam})${pts}${inj}`;
+  };
+
+  const fairnessLabel =
+    fairness <= 25 ? "heavily favoring me (I should get much more value back)" :
+    fairness <= 50 ? "slightly favoring me (I get a bit more value)" :
+    fairness <= 75 ? "mostly balanced with a small edge to me" :
+    "perfectly fair and equal value exchange";
+
+  const teamRosters: Record<number, typeof playersTable.$inferSelect[]> = {};
+  for (const t of opposingTeams) {
+    teamRosters[t.id] = await db.select().from(playersTable).where(eq(playersTable.teamId, t.id));
+  }
+
+  const posFilter = targetPositions && targetPositions.length > 0
+    ? `I specifically want to receive players at these positions: ${targetPositions.join(", ")}.`
+    : "";
+  const sizeFilter = packageSize ? `I want to receive at most ${packageSize} player(s) in return.` : "";
+
+  const prompt = `You are a fantasy sports trade advisor. Find the best trade packages I can propose.
+
+MY TEAM: "${myTeam.name}" (${myTeam.wins}W-${myTeam.losses}L)
+PLAYERS I AM OFFERING: 
+${offeredPlayers.map(formatPlayer).join("\n") || "(none specified - suggest based on my weakest players)"}
+
+DESIRED FAIRNESS: ${fairness}% — ${fairnessLabel}
+${posFilter}
+${sizeFilter}
+
+MY FULL ROSTER:
+${myRoster.map(formatPlayer).join("\n")}
+
+OPPOSING TEAMS AND THEIR ROSTERS:
+${opposingTeams.map(t => {
+    const roster = teamRosters[t.id] ?? [];
+    return `--- ${t.name} (${t.wins}W-${t.losses}L) [ID:${t.id}] ---\n${roster.map(formatPlayer).join("\n")}`;
+  }).join("\n\n")}
+
+For each opposing team, identify the single best trade package I could propose that matches my target fairness level of ${fairness}%. Consider each team's needs and my offered players' value. Skip teams where no reasonable package exists.
+
+Return ONLY this JSON (no markdown, no extra text):
+{
+  "packages": [
+    {
+      "targetTeamId": <number>,
+      "targetTeamName": "<string>",
+      "record": "<W>-<L>",
+      "playersToReceive": ["<player name (pos, team) pts>"],
+      "fairnessScore": <estimated actual fairness 0-100>,
+      "reasoning": "<1-2 sentences: why this works for both sides and how it hits the fairness target>",
+      "recommendation": "<Send It|Consider|Skip>"
+    }
+  ]
+}`;
+
+  const promptHash = hashPrompt(prompt);
+  const [cached] = await db.select().from(aiCacheTable).where(eq(aiCacheTable.promptHash, promptHash));
+  if (cached) {
+    logger.info({ promptHash }, "Trade Finder: cache hit");
+    const cachedData = JSON.parse(cached.response) as { packages: TradePackage[] };
+    return { myTeamName: myTeam.name, packages: cachedData.packages ?? [], cached: true };
+  }
+
+  logger.info({ myTeamId, leagueId, fairness, offeredCount: offeredPlayers.length }, "Calling Groq AI for Trade Finder");
+  const rawResponse = await callGroq(prompt, {
+    systemPrompt: "You are an expert fantasy sports trade analyst. Analyze rosters and return valid JSON only.",
+    maxTokens: 1200,
+    temperature: 0.4,
+  });
+
+  let parsed: { packages: TradePackage[] };
+  try {
+    parsed = JSON.parse(rawResponse);
+  } catch {
+    parsed = { packages: [] };
+  }
+
+  // Sort: Send It first, then Consider, then Skip, within each group by fairnessScore closest to target
+  const order = { "Send It": 0, "Consider": 1, "Skip": 2 };
+  parsed.packages.sort((a, b) => {
+    const oa = order[a.recommendation as keyof typeof order] ?? 2;
+    const ob = order[b.recommendation as keyof typeof order] ?? 2;
+    if (oa !== ob) return oa - ob;
+    return Math.abs(a.fairnessScore - fairness) - Math.abs(b.fairnessScore - fairness);
+  });
+
+  await db.insert(aiCacheTable).values({
+    promptHash,
+    prompt,
+    response: JSON.stringify(parsed),
+    teamAId: myTeamId,
+    teamBId: myTeamId,
+    teamAName: myTeam.name,
+    teamBName: "Trade Finder",
+    winScoreA: fairness,
+    winScoreB: 100 - fairness,
+    recommendation: "Trade Finder",
+  });
+
+  return { myTeamName: myTeam.name, packages: parsed.packages ?? [], cached: false };
+}
+
+// ── Team Insights ─────────────────────────────────────────────────────────────
 
 export interface InsightTip {
   type: string;

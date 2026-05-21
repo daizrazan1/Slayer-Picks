@@ -290,6 +290,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /trade/find:
+    post:
+      operationId: findTrades
+      tags: [trade]
+      summary: AI Trade Finder
+      description: Scans all opposing teams and suggests trade packages matching the desired fairness level
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeFindInput"
+      responses:
+        "200":
+          description: Trade finder results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeFindResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /teams/{teamId}/insights:
     get:
       operationId: getTeamInsights
@@ -513,6 +545,72 @@ components:
           type: ["number", "null"]
         injuryStatus:
           type: ["string", "null"]
+
+    TradeFindInput:
+      type: object
+      required: [leagueId, myTeamId, offeredPlayerIds, fairness]
+      properties:
+        leagueId:
+          type: integer
+        myTeamId:
+          type: integer
+        offeredPlayerIds:
+          type: array
+          items:
+            type: integer
+          description: Player IDs I am offering
+        fairness:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: "Desired trade fairness: 1=heavily favors me, 100=perfectly equal"
+        targetPositions:
+          type: array
+          items:
+            type: string
+          description: Optional positions to target (e.g. QB, RB, WR)
+        packageSize:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Max number of players to receive in a package
+
+    TradePackage:
+      type: object
+      required: [targetTeamId, targetTeamName, record, playersToReceive, fairnessScore, reasoning, recommendation]
+      properties:
+        targetTeamId:
+          type: integer
+        targetTeamName:
+          type: string
+        record:
+          type: string
+        playersToReceive:
+          type: array
+          items:
+            type: string
+          description: Player names/details to request back
+        fairnessScore:
+          type: integer
+          description: Estimated fairness 0-100
+        reasoning:
+          type: string
+        recommendation:
+          type: string
+          description: "Send It, Consider, or Skip"
+
+    TradeFindResult:
+      type: object
+      required: [packages, myTeamName, cached]
+      properties:
+        myTeamName:
+          type: string
+        packages:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradePackage"
+        cached:
+          type: boolean
 
     TradeEvalInput:
       type: object
