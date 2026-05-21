@@ -9,9 +9,12 @@ import { ArrowRightLeft, Sparkles, AlertCircle, CheckCircle2, ChevronRight, Scal
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { PlayerAvatar } from "@/components/player-avatar";
+import { useSport } from "@/contexts/sport-context";
 
 export default function TradeLab() {
   const { toast } = useToast();
+  const { sport } = useSport();
   const [leagueId, setLeagueId] = useState<number | null>(null);
   
   const [teamAId, setTeamAId] = useState<number | null>(null);
@@ -129,17 +132,18 @@ export default function TradeLab() {
                             Players to give up
                           </div>
                           {rosterA.map(player => (
-                            <label key={player.id} className="flex items-start space-x-3 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors">
+                            <label key={player.id} className="flex items-center gap-2.5 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors">
                               <Checkbox 
                                 checked={teamAPlayers.includes(player.id)} 
-                                onCheckedChange={() => togglePlayerA(player.id)} 
-                                className="mt-1"
+                                onCheckedChange={() => togglePlayerA(player.id)}
+                                className="shrink-0"
                               />
-                              <div className="flex-1 space-y-1 leading-none">
-                                <p className="text-sm font-medium">{player.fullName}</p>
-                                <p className="text-xs text-muted-foreground uppercase">{player.position} • {player.proTeam}</p>
+                              <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="sm" />
+                              <div className="flex-1 min-w-0 leading-none">
+                                <p className="text-sm font-medium truncate">{player.fullName}</p>
+                                <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                               </div>
-                              <div className="text-xs font-mono text-primary font-bold">{player.projectedPoints?.toFixed(1) || "-"}</div>
+                              <div className="text-xs font-mono text-primary font-bold shrink-0">{player.projectedPoints?.toFixed(1) || "-"}</div>
                             </label>
                           ))}
                         </div>
@@ -178,17 +182,18 @@ export default function TradeLab() {
                             Players to give up
                           </div>
                           {rosterB.map(player => (
-                            <label key={player.id} className="flex items-start space-x-3 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors">
+                            <label key={player.id} className="flex items-center gap-2.5 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors">
                               <Checkbox 
                                 checked={teamBPlayers.includes(player.id)} 
-                                onCheckedChange={() => togglePlayerB(player.id)} 
-                                className="mt-1"
+                                onCheckedChange={() => togglePlayerB(player.id)}
+                                className="shrink-0"
                               />
-                              <div className="flex-1 space-y-1 leading-none">
-                                <p className="text-sm font-medium">{player.fullName}</p>
-                                <p className="text-xs text-muted-foreground uppercase">{player.position} • {player.proTeam}</p>
+                              <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="sm" />
+                              <div className="flex-1 min-w-0 leading-none">
+                                <p className="text-sm font-medium truncate">{player.fullName}</p>
+                                <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                               </div>
-                              <div className="text-xs font-mono text-accent font-bold">{player.projectedPoints?.toFixed(1) || "-"}</div>
+                              <div className="text-xs font-mono text-accent font-bold shrink-0">{player.projectedPoints?.toFixed(1) || "-"}</div>
                             </label>
                           ))}
                         </div>
