@@ -59,7 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="bg-primary text-primary-foreground p-1.5 rounded-md">
             <Activity className="w-6 h-6" />
           </div>
-          <span className="font-bold text-lg tracking-tight uppercase">FANTASY<span className="text-primary">HELPER</span></span>
+          <span className="font-bold text-lg tracking-tight uppercase">Slayer<span className="text-primary">Picks</span></span>
         </div>
         <div className="px-4 pb-4">
           <SportSelector />
@@ -74,7 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-card">
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-primary" />
-            <span className="font-bold uppercase tracking-tight text-sm">FANTASYHELPER</span>
+            <span className="font-bold uppercase tracking-tight text-sm">Slayer<span className="text-primary">Picks</span></span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-36">
@@ -91,7 +91,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <div className="bg-primary text-primary-foreground p-1.5 rounded-md">
                     <Activity className="w-6 h-6" />
                   </div>
-                  <span className="font-bold text-lg tracking-tight uppercase">FANTASY<span className="text-primary">HELPER</span></span>
+                  <span className="font-bold text-lg tracking-tight uppercase">Slayer<span className="text-primary">Picks</span></span>
                 </div>
                 <div className="px-4 pb-4">
                   <SportSelector />
