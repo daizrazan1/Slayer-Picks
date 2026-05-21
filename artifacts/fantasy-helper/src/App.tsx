@@ -12,6 +12,9 @@ import Sync from "./pages/sync";
 import Leagues from "./pages/leagues";
 import LeagueDetail from "./pages/league-detail";
 import TradeLab from "./pages/trade";
+import MyTeam from "./pages/my-team";
+import Standings from "./pages/standings";
+import WaiverWire from "./pages/waiver-wire";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,10 +30,13 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/sync" component={Sync} />
+        <Route path="/my-team" component={MyTeam} />
         <Route path="/leagues" component={Leagues} />
         <Route path="/leagues/:id" component={LeagueDetail} />
+        <Route path="/standings" component={Standings} />
         <Route path="/trade" component={TradeLab} />
+        <Route path="/waiver-wire" component={WaiverWire} />
+        <Route path="/sync" component={Sync} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

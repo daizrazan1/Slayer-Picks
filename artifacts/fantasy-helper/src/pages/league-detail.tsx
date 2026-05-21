@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useGetLeague, useListTeams, useListTeamPlayers } from "@workspace/api-client-react";
+import { PlayerAvatar } from "@/components/player-avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Users, Trophy } from "lucide-react";
@@ -142,7 +143,12 @@ export default function LeagueDetail() {
                         <TableCell className="font-bold text-xs">
                           <span className="bg-secondary px-2 py-1 rounded text-secondary-foreground">{player.position}</span>
                         </TableCell>
-                        <TableCell className="font-medium">{player.fullName}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={league.sport} name={player.fullName} size="sm" />
+                            <span className="font-medium">{player.fullName}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-muted-foreground uppercase text-xs font-bold tracking-wide">{player.proTeam}</TableCell>
                         <TableCell className="text-right font-mono font-bold text-primary">{player.projectedPoints?.toFixed(1) || "-"}</TableCell>
                         <TableCell className="text-right font-mono text-muted-foreground">{player.avgPoints?.toFixed(1) || "-"}</TableCell>

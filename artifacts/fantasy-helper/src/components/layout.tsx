@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Trophy, ArrowRightLeft, Settings, LayoutDashboard, Menu } from "lucide-react";
+import { Activity, Trophy, ArrowRightLeft, Settings, LayoutDashboard, Menu, Users, BarChart2, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,8 +8,11 @@ import { useSport, SPORTS } from "@/contexts/sport-context";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/my-team", label: "My Team", icon: Users },
   { href: "/leagues", label: "Leagues", icon: Trophy },
+  { href: "/standings", label: "Standings", icon: BarChart2 },
   { href: "/trade", label: "Trade Lab", icon: ArrowRightLeft },
+  { href: "/waiver-wire", label: "Waiver Wire", icon: List },
   { href: "/sync", label: "Sync Data", icon: Settings },
 ];
 
