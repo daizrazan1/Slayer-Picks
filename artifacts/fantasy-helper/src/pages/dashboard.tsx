@@ -1,21 +1,25 @@
 import React from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDashboardSummary,
   useListRecentTrades,
   useDeleteTrade,
   useClearAllTrades,
+  useGetSyncStatus,
+  useTriggerSyncRefresh,
   getListRecentTradesQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetSyncStatusQueryKey,
 } from "@workspace/api-client-react";
 import { useSport, SPORTS } from "@/contexts/sport-context";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Users, Trophy, Activity, ArrowRightLeft, Clock, X, Trash2 } from "lucide-react";
+import { Users, Trophy, Activity, ArrowRightLeft, Clock, X, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -38,21 +42,60 @@ export default function Dashboard() {
   const { sport } = useSport();
   const sportLabel = SPORTS.find(s => s.value === sport)?.label ?? sport;
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+
   const { data: summary, isLoading } = useGetDashboardSummary({ sport });
   const { data: recentTrades, isLoading: tradesLoading } = useListRecentTrades();
+  const { data: syncStatus } = useGetSyncStatus();
 
-  const invalidate = () => {
+  const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: getListRecentTradesQueryKey() });
     qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ sport }) });
+    qc.invalidateQueries({ queryKey: getGetSyncStatusQueryKey() });
   };
 
   const { mutate: deleteTrade, isPending: deleting } = useDeleteTrade({
-    mutation: { onSuccess: invalidate },
+    mutation: { onSuccess: invalidateAll },
   });
 
   const { mutate: clearAll, isPending: clearing } = useClearAllTrades({
-    mutation: { onSuccess: invalidate },
+    mutation: { onSuccess: invalidateAll },
   });
+
+  const { mutate: refreshSync, isPending: syncing } = useTriggerSyncRefresh({
+    mutation: {
+      onSuccess: (data) => {
+        invalidateAll();
+        if (data.errors && data.errors.length > 0) {
+          toast({
+            title: "Sync completed with errors",
+            description: data.errors[0],
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Synced successfully",
+            description: `${data.leaguesSynced} league(s), ${data.playersSynced} players updated.`,
+          });
+        }
+      },
+      onError: () => {
+        navigate("/sync");
+      },
+    },
+  });
+
+  const hasCredentials = syncStatus?.hasCredentials ?? false;
+  const staleLeagues = syncStatus?.leagues.filter(l => l.lastAutoSyncError) ?? [];
+
+  const handleSyncNow = () => {
+    if (hasCredentials) {
+      refreshSync();
+    } else {
+      navigate("/sync");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -88,17 +131,47 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* ── Stale credentials warning ── */}
+      {staleLeagues.length > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-yellow-400">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-sm">Auto-sync failed — ESPN session may have expired</p>
+            <p className="text-xs text-yellow-400/70 mt-0.5">
+              {staleLeagues.map(l => l.name).join(", ")} — please re-sync with your ESPN cookies to restore auto-sync.
+            </p>
+          </div>
+          <Link href="/sync">
+            <Button size="sm" variant="outline" className="shrink-0 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 uppercase text-xs font-bold">
+              Re-sync
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight uppercase">{sportLabel} Command Center</h1>
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             <Clock className="w-4 h-4" />
             Last synced: {summary.lastSyncAt ? new Date(summary.lastSyncAt).toLocaleString() : "Never"}
+            {hasCredentials && (
+              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
+                Auto-sync on
+              </span>
+            )}
           </p>
         </div>
-        <Link href="/sync">
-          <Button variant="outline" className="uppercase font-bold tracking-wide">Sync Now</Button>
-        </Link>
+        <Button
+          variant="outline"
+          className="uppercase font-bold tracking-wide gap-2"
+          disabled={syncing}
+          onClick={handleSyncNow}
+        >
+          <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "Syncing…" : "Sync Now"}
+        </Button>
       </div>
 
       {/* ── Stat cards ── */}
@@ -196,7 +269,6 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {recentTrades.slice(0, 5).map((trade) => (
                   <div key={trade.id} className="relative p-3 rounded-lg border border-border bg-background space-y-2">
-                    {/* Delete (X) button */}
                     <button
                       aria-label="Delete trade"
                       disabled={deleting || clearing}
@@ -206,14 +278,12 @@ export default function Dashboard() {
                       <X className="w-3 h-3" />
                     </button>
 
-                    {/* Teams */}
                     <div className="flex items-center gap-2 pr-6">
                       <span className="font-bold text-sm truncate flex-1">{trade.teamAName ?? "Team A"}</span>
                       <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                       <span className="font-bold text-sm truncate flex-1 text-right">{trade.teamBName ?? "Team B"}</span>
                     </div>
 
-                    {/* Win score bar */}
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-primary font-mono font-bold w-8 text-right shrink-0">{trade.winScoreA}</span>
                       <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
@@ -225,10 +295,8 @@ export default function Dashboard() {
                       <span className="text-xs text-muted-foreground font-mono font-bold w-8 shrink-0">{trade.winScoreB}</span>
                     </div>
 
-                    {/* Analysis excerpt */}
                     <p className="text-xs text-muted-foreground leading-snug line-clamp-2">{trade.analysis}</p>
 
-                    {/* Footer: recommendation + time */}
                     <div className="flex items-center justify-between pt-0.5">
                       <Badge
                         variant="outline"

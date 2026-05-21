@@ -112,6 +112,31 @@ export interface TradeEvalResult {
   evaluatedAt?: string | null;
 }
 
+export interface LeagueSyncStatus {
+  id: number;
+  name: string;
+  sport: string;
+  autoSyncEnabled: boolean;
+  /** @nullable */
+  lastAutoSyncAt?: string | null;
+  /** @nullable */
+  lastAutoSyncError?: string | null;
+}
+
+export interface SyncStatus {
+  hasCredentials: boolean;
+  leagues: LeagueSyncStatus[];
+}
+
+export interface SyncRefreshResult {
+  success: boolean;
+  leaguesSynced: number;
+  playersSynced: number;
+  errors: string[];
+  /** @nullable */
+  lastSyncAt?: string | null;
+}
+
 export interface DeleteResult {
   success: boolean;
   deleted: number;

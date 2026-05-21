@@ -38,6 +38,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  /sync/status:
+    get:
+      operationId: getSyncStatus
+      tags: [sync]
+      summary: Get auto-sync status for all leagues
+      responses:
+        "200":
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+
+  /sync/refresh:
+    post:
+      operationId: triggerSyncRefresh
+      tags: [sync]
+      summary: Immediately re-sync all leagues with stored credentials
+      responses:
+        "200":
+          description: Sync completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncRefreshResult"
+        "400":
+          description: No stored credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /sync-espn:
     post:
       operationId: syncEspn
@@ -503,6 +535,53 @@ components:
         cached:
           type: boolean
         evaluatedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    LeagueSyncStatus:
+      type: object
+      required: [id, name, sport, autoSyncEnabled]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sport:
+          type: string
+        autoSyncEnabled:
+          type: boolean
+        lastAutoSyncAt:
+          type: ["string", "null"]
+          format: date-time
+        lastAutoSyncError:
+          type: ["string", "null"]
+
+    SyncStatus:
+      type: object
+      required: [hasCredentials, leagues]
+      properties:
+        hasCredentials:
+          type: boolean
+        leagues:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeagueSyncStatus"
+
+    SyncRefreshResult:
+      type: object
+      required: [success, leaguesSynced, playersSynced, errors]
+      properties:
+        success:
+          type: boolean
+        leaguesSynced:
+          type: integer
+        playersSynced:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+        lastSyncAt:
           type: ["string", "null"]
           format: date-time
 

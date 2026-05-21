@@ -62,6 +62,10 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
             season: espnLeague.seasonId ?? new Date().getFullYear(),
             teamCount: espnLeague.teams?.length ?? null,
             syncedAt: new Date(),
+            espnS2: s2,
+            swid,
+            autoSyncEnabled: true,
+            lastAutoSyncError: null,
           })
           .where(eq(leaguesTable.id, existing.id));
         dbLeagueId = existing.id;
@@ -75,6 +79,9 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
             sport: espnLeague.sport ?? sport ?? "football",
             teamCount: espnLeague.teams?.length ?? null,
             syncedAt: new Date(),
+            espnS2: s2,
+            swid,
+            autoSyncEnabled: true,
           })
           .returning();
         dbLeagueId = inserted!.id;

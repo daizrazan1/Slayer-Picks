@@ -18,6 +18,34 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get auto-sync status for all leagues
+ */
+export const GetSyncStatusResponse = zod.object({
+  "hasCredentials": zod.boolean(),
+  "leagues": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sport": zod.string(),
+  "autoSyncEnabled": zod.boolean(),
+  "lastAutoSyncAt": zod.coerce.date().nullish(),
+  "lastAutoSyncError": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary Immediately re-sync all leagues with stored credentials
+ */
+export const TriggerSyncRefreshResponse = zod.object({
+  "success": zod.boolean(),
+  "leaguesSynced": zod.number(),
+  "playersSynced": zod.number(),
+  "errors": zod.array(zod.string()),
+  "lastSyncAt": zod.coerce.date().nullish()
+})
+
+
+/**
  * Accepts espn_s2 and SWID tokens, fetches and caches ESPN data
  * @summary Sync ESPN fantasy data
  */
