@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useListLeagues, useListTeams, useListTeamPlayers, useEvaluateTrade } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,16 @@ export default function TradeLab() {
   const [teamAPlayers, setTeamAPlayers] = useState<number[]>([]);
   const [teamBPlayers, setTeamBPlayers] = useState<number[]>([]);
 
-  const { data: leagues, isLoading: leaguesLoading } = useListLeagues();
+  useEffect(() => {
+    setLeagueId(null);
+    setTeamAId(null);
+    setTeamBId(null);
+    setTeamAPlayers([]);
+    setTeamBPlayers([]);
+    evaluateMutation.reset();
+  }, [sport]);
+
+  const { data: leagues, isLoading: leaguesLoading } = useListLeagues({ sport });
   const { data: teams, isLoading: teamsLoading } = useListTeams(leagueId || 0, { 
     query: { enabled: !!leagueId, queryKey: ["listTeams", leagueId] } 
   });
