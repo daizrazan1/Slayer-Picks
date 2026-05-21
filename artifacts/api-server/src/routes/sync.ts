@@ -265,13 +265,38 @@ async function fetchEspnLeagues(
     }
   }
 
-  const sportHint = sport ? `for ${sport}` : "for any sport";
+  const sportHint = sport ?? "unknown sport";
+
+  // Give a specific, short message based on what ESPN actually said
+  const has401 = lastError.some(e => e.includes("HTTP 401"));
+  const hasHtml = lastError.some(e => e.includes("returned HTML"));
+  const allNotFound = lastError.every(e => e.includes("HTTP 404") || e.includes("Not Found"));
+
+  if (has401) {
+    throw new Error(
+      `League ID ${leagueId} exists on ESPN but your account isn't a member of it. ` +
+        `Make sure you're using the ${sportHint} league ID, not a different sport's league ID. ` +
+        `You can find it in the URL when you open that league on fantasy.espn.com.`
+    );
+  }
+
+  if (allNotFound) {
+    throw new Error(
+      `League ID ${leagueId} was not found on ESPN for ${sportHint}. ` +
+        `Double-check the number in your league URL (fantasy.espn.com/baseball/league?leagueId=XXXXX).`
+    );
+  }
+
+  if (hasHtml) {
+    throw new Error(
+      `ESPN rejected the request — your espn_s2 / SWID cookies may be expired. ` +
+        `Log out of ESPN, log back in, then copy fresh cookies from DevTools.`
+    );
+  }
 
   throw new Error(
-    `Could not reach ESPN Fantasy API for league ${leagueId} ${sportHint}. ` +
-      `ESPN is blocking server requests or the cookies are expired. ` +
-      `Details: ${lastError.slice(0, 4).join(" | ")}. ` +
-      `Tip: Log out of ESPN, log back in, then copy fresh espn_s2 and SWID cookies.`
+    `Could not sync league ${leagueId} for ${sportHint}. ` +
+      `ESPN may be blocking server requests. Try the bookmarklet instead.`
   );
 }
 
