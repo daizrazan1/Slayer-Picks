@@ -166,72 +166,105 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
   }
 });
 
+function espnHeaders(s2: string, swid: string): Record<string, string> {
+  return {
+    "Cookie": `espn_s2=${encodeURIComponent(s2)}; SWID=${swid}`,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://fantasy.espn.com/",
+    "Origin": "https://fantasy.espn.com",
+    "X-Fantasy-Source": "kona",
+    "X-Fantasy-Platform": "kona-PROD-2ba39f35c29c3de0f14e42e66ffa2a1dff5c45b7",
+    "Connection": "keep-alive",
+    "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+  };
+}
+
+// ESPN has two API hosts — try both
+const ESPN_HOSTS = [
+  "https://lm-api-reads.fantasy.espn.com",
+  "https://fantasy.espn.com",
+];
+
 async function fetchEspnLeagues(
   s2: string,
   swid: string,
   leagueId: number,
   sport?: string
 ): Promise<EspnLeagueData[]> {
-  const cookieHeader = `espn_s2=${s2}; SWID=${swid}`;
   const currentYear = new Date().getFullYear();
-  const years = [currentYear, currentYear + 1, currentYear - 1];
+  // Basketball season year = the year it ends (2024-25 season → 2025)
+  const years = [currentYear, currentYear - 1, currentYear + 1];
 
   const gameIdsToTry = sport && SPORT_TO_GAME_ID[sport]
     ? [{ gameId: SPORT_TO_GAME_ID[sport]!, sport }]
     : ALL_GAME_IDS;
 
+  const headers = espnHeaders(s2, swid);
   const lastError: string[] = [];
 
   for (const { gameId, sport: sportName } of gameIdsToTry) {
-    for (const year of years) {
-      const url = `https://fantasy.espn.com/apis/v3/games/${gameId}/seasons/${year}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster&view=mSettings`;
+    for (const host of ESPN_HOSTS) {
+      for (const year of years) {
+        const url = `${host}/apis/v3/games/${gameId}/seasons/${year}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster&view=mSettings&view=mStandings`;
+        const label = `${sportName}/${year} (${host.includes("lm-api") ? "new" : "old"})`;
 
-      try {
-        const resp = await fetch(url, {
-          headers: {
-            Cookie: cookieHeader,
-            Accept: "application/json",
-            "X-Fantasy-Source": "kona",
-            "X-Fantasy-Platform": "kona-PROD-2ba39f35c29c3de0f14e42e66ffa2a1dff5c45b7",
-          },
-        });
+        try {
+          logger.info({ url: url.replace(s2.slice(0, 10), "***") }, "Trying ESPN endpoint");
 
-        const contentType = resp.headers.get("content-type") ?? "";
+          const resp = await fetch(url, { headers });
 
-        if (!resp.ok) {
-          lastError.push(`${sportName}/${year}: HTTP ${resp.status}`);
-          continue;
+          const contentType = resp.headers.get("content-type") ?? "";
+          const isJson = contentType.includes("application/json") || contentType.includes("text/plain");
+
+          if (!resp.ok) {
+            const body = isJson ? await resp.text() : "(html)";
+            lastError.push(`${label}: HTTP ${resp.status} ${body.slice(0, 80)}`);
+            continue;
+          }
+
+          if (!isJson) {
+            lastError.push(`${label}: returned HTML — cookies may be expired or blocked`);
+            continue;
+          }
+
+          const data = (await resp.json()) as EspnLeagueData;
+
+          if (!data || (typeof data !== "object")) {
+            lastError.push(`${label}: empty/invalid JSON`);
+            continue;
+          }
+
+          // ESPN returns an error object with "error" key on invalid league/auth
+          if ("error" in data) {
+            lastError.push(`${label}: ESPN error — ${JSON.stringify((data as Record<string, unknown>).error)}`);
+            continue;
+          }
+
+          logger.info({ gameId, year, leagueId, host }, "ESPN sync succeeded");
+          return [{ ...data, id: leagueId, sport: sportName }];
+        } catch (e) {
+          lastError.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
         }
-
-        if (!contentType.includes("application/json")) {
-          lastError.push(`${sportName}/${year}: ESPN returned HTML (not JSON) — credentials may be expired`);
-          continue;
-        }
-
-        const data = (await resp.json()) as EspnLeagueData;
-
-        if (!data || (!data.teams && !data.settings)) {
-          lastError.push(`${sportName}/${year}: empty response`);
-          continue;
-        }
-
-        logger.info({ gameId, year, leagueId }, "ESPN sync succeeded");
-        return [{ ...data, id: leagueId, sport: sportName }];
-      } catch (e) {
-        lastError.push(`${sportName}/${year}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
   }
 
-  const sportHint = sport
-    ? `for ${sport}`
-    : "for any sport (football, basketball, baseball, hockey)";
+  const sportHint = sport ? `for ${sport}` : "for any sport";
 
   throw new Error(
-    `Could not find league ${leagueId} ${sportHint}. ` +
-      `Attempts: ${lastError.slice(0, 3).join("; ")}. ` +
-      `Check that your espn_s2 and SWID are current, and that this is the correct League ID ` +
-      `(find it in your ESPN league URL: fantasy.espn.com/[sport]/league?leagueId=XXXXX).`
+    `Could not reach ESPN Fantasy API for league ${leagueId} ${sportHint}. ` +
+      `ESPN is blocking server requests or the cookies are expired. ` +
+      `Details: ${lastError.slice(0, 4).join(" | ")}. ` +
+      `Tip: Log out of ESPN, log back in, then copy fresh espn_s2 and SWID cookies.`
   );
 }
 
