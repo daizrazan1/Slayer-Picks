@@ -219,7 +219,7 @@ export default function Dashboard() {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="uppercase tracking-wide">Top Players</CardTitle>
-            <CardDescription>Highest scoring players across your leagues</CardDescription>
+            <CardDescription>Most season fantasy points (your league's scoring)</CardDescription>
           </CardHeader>
           <CardContent>
             {summary.topPlayers && summary.topPlayers.length > 0 ? (

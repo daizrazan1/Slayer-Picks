@@ -132,8 +132,8 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
             fullName: player.fullName ?? `Player ${player.id}`,
             position: getPositionName(entry.lineupSlotId ?? 0, detectedSport),
             proTeam: getProTeamAbbrev(player.proTeamId ?? 0, detectedSport),
-            projectedPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
-            avgPoints: entry.playerPoolEntry?.averageDraftPosition ?? null,
+            projectedPoints: null,
+            avgPoints: null,
             totalPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
             injuryStatus: player.injuryStatus ?? null,
           };
