@@ -301,10 +301,13 @@ ${myRoster.filter(p => !benchSlots.has(p.position)).map(formatPlayer).join("\n")
 OPPOSING TEAMS(starters only):
 ${oppTeamLines}
 
-For each team find the best package I can propose at ${fairness}% fairness(${fairnessInstr}).
-Use ppg to judge value. Skip teams with no viable package.
+RULES:
+- The OFFERING listed above is FIXED. I am sending EXACTLY those players and NO others. Do NOT add, swap, or mention any other players on my side.
+- Your ONLY job is to decide which players I should RECEIVE from each opposing team.
+- For each team, find the best package for me to receive at ${fairness}% fairness(${fairnessInstr}).
+- Use ppg to judge value. Skip teams with no viable package.
 Return ONLY JSON:
-{"packages":[{"targetTeamId":<n>,"targetTeamName":"<s>","record":"<W-L>","playersToReceive":["<name ppg tier>"],"fairnessScore":<0-100>,"reasoning":"<cite ppg numbers>","recommendation":"<Send It|Consider|Skip>"}]}`;
+{"packages":[{"targetTeamId":<n>,"targetTeamName":"<s>","record":"<W-L>","playersToReceive":["<name ppg tier>"],"fairnessScore":<0-100>,"reasoning":"<2 sentences citing ppg numbers for both sides>","recommendation":"<Send It|Consider|Skip>"}]}`;
 
   const promptHash = hashPrompt(prompt);
   const [cached] = await db.select().from(aiCacheTable).where(eq(aiCacheTable.promptHash, promptHash));

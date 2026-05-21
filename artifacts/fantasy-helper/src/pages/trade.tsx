@@ -49,9 +49,11 @@ function RecBadge({ rec }: { rec: string }) {
 
 function PackageCard({
   pkg,
+  offeredPlayers,
   onLoadManual,
 }: {
   pkg: TradePackage;
+  offeredPlayers: Array<{ id: number; fullName: string; position: string }>;
   onLoadManual: (targetTeamId: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -64,6 +66,18 @@ function PackageCard({
             <p className="text-xs text-muted-foreground">{pkg.record}</p>
           </div>
           <RecBadge rec={pkg.recommendation} />
+        </div>
+
+        <div>
+          <p className="text-xs text-muted-foreground uppercase font-bold mb-1">You send</p>
+          <ul className="space-y-0.5">
+            {offeredPlayers.map(p => (
+              <li key={p.id} className="text-sm font-medium text-foreground flex items-start gap-1.5">
+                <span className="text-destructive mt-0.5">−</span>{p.fullName}
+                <span className="text-xs text-muted-foreground">({p.position})</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div>
@@ -607,7 +621,12 @@ export default function TradeLab() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {findMutation.data.packages.map((pkg, i) => (
-                      <PackageCard key={i} pkg={pkg} onLoadManual={handleLoadInManual} />
+                      <PackageCard
+                        key={i}
+                        pkg={pkg}
+                        offeredPlayers={(myRoster ?? []).filter(p => offeredPlayerIds.includes(p.id))}
+                        onLoadManual={handleLoadInManual}
+                      />
                     ))}
                   </div>
                 )}
