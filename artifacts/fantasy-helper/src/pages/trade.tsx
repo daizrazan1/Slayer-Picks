@@ -131,6 +131,16 @@ function PackageCard({
   );
 }
 
+function calcPpg(
+  totalPoints: number | null | undefined,
+  roster: Array<{ totalPoints?: number | null }>
+): string {
+  if (totalPoints == null) return "-";
+  const maxPts = Math.max(...roster.map(p => p.totalPoints ?? 0), 1);
+  const estGames = Math.max(1, Math.round(maxPts / 68));
+  return (totalPoints / estGames).toFixed(1);
+}
+
 export default function TradeLab() {
   const { toast } = useToast();
   const { sport } = useSport();
@@ -291,7 +301,7 @@ export default function TradeLab() {
                                   <p className="text-sm font-medium truncate">{player.fullName}</p>
                                   <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                                 </div>
-                                <div className="text-xs font-mono text-primary font-bold shrink-0">{player.totalPoints?.toFixed(1) ?? "-"}</div>
+                                <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, rosterA ?? [])} <span className="text-muted-foreground font-normal">ppg</span></div>
                               </label>
                             ))}
                           </>
@@ -330,7 +340,7 @@ export default function TradeLab() {
                                   <p className="text-sm font-medium truncate">{player.fullName}</p>
                                   <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                                 </div>
-                                <div className="text-xs font-mono text-accent font-bold shrink-0">{player.totalPoints?.toFixed(1) ?? "-"}</div>
+                                <div className="text-xs font-mono text-accent font-bold shrink-0">{calcPpg(player.totalPoints, rosterB ?? [])} <span className="text-muted-foreground font-normal">ppg</span></div>
                               </label>
                             ))}
                           </>
@@ -539,7 +549,7 @@ export default function TradeLab() {
                             <p className="text-sm font-medium truncate">{player.fullName}</p>
                             <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
                           </div>
-                          <div className="text-xs font-mono text-primary font-bold shrink-0">{player.totalPoints?.toFixed(1) ?? "-"}</div>
+                          <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, myRoster ?? [])} <span className="text-muted-foreground font-normal">ppg</span></div>
                         </label>
                       ))
                     ) : myTeamId ? (

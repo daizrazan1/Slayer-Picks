@@ -6,7 +6,8 @@ import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.1-8b-instant";
+const MODEL_FAST = "llama-3.1-8b-instant";
+const MODEL_SMART = "llama-3.3-70b-versatile";
 
 export function hashPrompt(prompt: string): string {
   return createHash("sha256").update(prompt).digest("hex");
@@ -14,7 +15,7 @@ export function hashPrompt(prompt: string): string {
 
 async function callGroq(
   prompt: string,
-  opts: { systemPrompt?: string; maxTokens?: number; temperature?: number } = {}
+  opts: { systemPrompt?: string; maxTokens?: number; temperature?: number; model?: string } = {}
 ): Promise<string> {
   const apiKey = process.env["GROQ_API_KEY"];
   if (!apiKey) {
@@ -28,7 +29,7 @@ async function callGroq(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: opts.model ?? MODEL_FAST,
       messages: [
         {
           role: "system",
@@ -90,37 +91,54 @@ export async function evaluateTrade(
     ? await db.select().from(playersTable).where(inArray(playersTable.id, teamBPlayerIds))
     : [];
 
-  // totalPoints is the only reliable stat we store; avgPoints/projectedPoints are null
+  // Compute per-game averages using the top scorer across both rosters as the games-played benchmark
+  const allRosterPlayers = [...allTeamAPlayers, ...allTeamBPlayers];
+  const leagueMaxPts = Math.max(...allRosterPlayers.map(p => p.totalPoints ?? 0), 1);
+  const estimatedGames = Math.max(1, Math.round(leagueMaxPts / 68));
+
+  const ppg = (p: typeof playersTable.$inferSelect) =>
+    p.totalPoints != null ? (p.totalPoints / estimatedGames).toFixed(1) : null;
+
   const formatPlayer = (p: typeof playersTable.$inferSelect) => {
-    const pts = p.totalPoints != null ? `${p.totalPoints.toFixed(0)} season pts` : "no pts data";
+    const avg = ppg(p);
+    const pts = avg ? `${avg} ppg (${p.totalPoints?.toFixed(0)} season pts)` : "no pts data";
     const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? ` [${p.injuryStatus}]` : "";
     return `  • ${p.fullName} (${p.position}, ${p.proTeam}) — ${pts}${inj}`;
   };
 
-  // Roster context: just names+positions so the AI understands each team's needs
-  // Do NOT include this in the trade players to avoid AI confusing roster with trade
+  const combinedPpg = (players: typeof givingUpA) =>
+    players.reduce((sum, p) => sum + (p.totalPoints != null ? p.totalPoints / estimatedGames : 0), 0).toFixed(1);
+
+  // Roster context for team needs — names only, do NOT discuss in analysis
   const rosterContext = (players: typeof allTeamAPlayers, tradingIds: number[]) =>
     players.filter(p => !tradingIds.includes(p.id)).map(p => `${p.fullName}(${p.position})`).join(", ") || "none";
 
-  const prompt = `Evaluate ONLY the players listed below in this fantasy sports trade. Do NOT mention or analyze any players not explicitly listed under "GIVES UP".
+  const prompt = `You are an expert fantasy basketball analyst. Evaluate ONLY the traded players listed below. Do NOT mention any player not explicitly listed under "GIVES UP".
 
-TRADE:
-Team A "${teamA.name}" (${teamA.wins}-${teamA.losses}) GIVES UP:
+TRADE (estimated games played this season: ~${estimatedGames}):
+Team A "${teamA.name}" (${teamA.wins}W-${teamA.losses}L) GIVES UP — combined ${combinedPpg(givingUpA)} ppg:
 ${givingUpA.map(formatPlayer).join("\n") || "  (none)"}
 
-Team B "${teamB.name}" (${teamB.wins}-${teamB.losses}) GIVES UP:
+Team B "${teamB.name}" (${teamB.wins}W-${teamB.losses}L) GIVES UP — combined ${combinedPpg(givingUpB)} ppg:
 ${givingUpB.map(formatPlayer).join("\n") || "  (none)"}
 
-Context (roster kept after trade — for needs assessment only, do NOT discuss these players in analysis):
+Roster context after trade (for positional needs only — do NOT mention these players in analysis):
 Team A keeps: ${rosterContext(allTeamAPlayers, teamAPlayerIds)}
 Team B keeps: ${rosterContext(allTeamBPlayers, teamBPlayerIds)}
 
-Base your analysis ONLY on the season points totals of the listed trade players. Higher season pts = more valuable.
+EVALUATION RULES:
+1. Use ppg as the primary value metric. A player averaging 65+ ppg is ELITE and carries outsized win-now value that combined lesser players often cannot match.
+2. Combined ppg alone does not equal value — one 74 ppg player is worth more than two 37 ppg players because elite players are scarce and ceiling-defining.
+3. Consider positional fit: does each team actually need what they're receiving?
+4. Account for trade timing: during the season, immediate production matters most. In the off-season, hold elite players unless receiving multiple strong players (55+ ppg each).
+5. Injury flags are significant — adjust value down for injured/questionable players.
+6. winScoreA/winScoreB must reflect actual lopsidedness. If Team A gives up a 74 ppg player for two 50 ppg players, Team A's win score should be LOW (25-35) and Team B's HIGH (70-80) — do not default to 50/50.
+
 Return ONLY this JSON (no markdown, no extra text):
 {
-  "winScoreA": <0-100, how much Team A benefits from this trade>,
-  "winScoreB": <0-100, how much Team B benefits from this trade>,
-  "analysis": "<2-3 sentences analyzing only the traded players by name and their season pts, explaining who wins and why>",
+  "winScoreA": <0-100>,
+  "winScoreB": <0-100>,
+  "analysis": "<3-4 sentences: name each traded player with their ppg, compare the sides, explain who wins and why, note off-season vs in-season implications>",
   "recommendation": "<Accept|Decline|Neutral> (from Team A's perspective)"
 }`;
 
@@ -143,7 +161,7 @@ Return ONLY this JSON (no markdown, no extra text):
   }
 
   logger.info({ promptHash }, "Calling Groq AI for trade evaluation");
-  const rawResponse = await callGroq(prompt);
+  const rawResponse = await callGroq(prompt, { model: MODEL_SMART, maxTokens: 800, temperature: 0.3 });
 
   let parsed: { winScoreA: number; winScoreB: number; analysis: string; recommendation: string };
   try {
