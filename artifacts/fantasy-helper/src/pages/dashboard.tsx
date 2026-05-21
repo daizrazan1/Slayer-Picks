@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "wouter";
 import { useGetDashboardSummary } from "@workspace/api-client-react";
 import { useSport, SPORTS } from "@/contexts/sport-context";
+import { PlayerAvatar } from "@/components/player-avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Trophy, Activity, ArrowRightLeft, Clock } from "lucide-react";
@@ -106,18 +107,19 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {summary.topPlayers && summary.topPlayers.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {summary.topPlayers.map((player) => (
-                  <div key={player.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
-                    <div>
-                      <div className="font-bold">{player.fullName}</div>
+                  <div key={player.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background">
+                    <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold truncate">{player.fullName}</div>
                       <div className="text-xs text-muted-foreground uppercase tracking-wide">
                         {player.position} • {player.proTeam}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-primary">{player.projectedPoints?.toFixed(1) || "-"}</div>
-                      <div className="text-xs text-muted-foreground uppercase">Proj Pts</div>
+                    <div className="text-right shrink-0">
+                      <div className="text-lg font-bold text-primary">{player.totalPoints?.toFixed(1) || "-"}</div>
+                      <div className="text-xs text-muted-foreground uppercase">Total Pts</div>
                     </div>
                   </div>
                 ))}

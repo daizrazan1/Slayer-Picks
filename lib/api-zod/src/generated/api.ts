@@ -189,6 +189,30 @@ export const EvaluateTradeResponse = zod.object({
 
 
 /**
+ * Generates AI-powered roster tips, trade suggestions, and waiver advice based on standings and player data
+ * @summary AI insights and tips for a team
+ */
+export const GetTeamInsightsParams = zod.object({
+  "teamId": zod.coerce.number()
+})
+
+export const GetTeamInsightsResponse = zod.object({
+  "teamId": zod.number(),
+  "teamName": zod.string(),
+  "insights": zod.string(),
+  "tips": zod.array(zod.object({
+  "type": zod.string().describe('trade, waiver, lineup, or general'),
+  "priority": zod.string().describe('high, medium, or low'),
+  "player": zod.string().nullish(),
+  "message": zod.string()
+})),
+  "standingsRank": zod.number().nullish(),
+  "totalTeams": zod.number().nullish(),
+  "cached": zod.boolean()
+})
+
+
+/**
  * Returns counts, last sync time, top players, and league overview
  * @summary Get dashboard summary stats
  */

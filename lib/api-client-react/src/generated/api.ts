@@ -31,6 +31,7 @@ import type {
   Player,
   SyncResult,
   Team,
+  TeamInsightsResult,
   TradeEvalInput,
   TradeEvalResult
 } from './api.schemas';
@@ -744,6 +745,84 @@ export const useEvaluateTrade = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getEvaluateTradeMutationOptions(options));
     }
+
+export const getGetTeamInsightsUrl = (teamId: number,) => {
+
+
+
+
+  return `/api/teams/${teamId}/insights`
+}
+
+/**
+ * Generates AI-powered roster tips, trade suggestions, and waiver advice based on standings and player data
+ * @summary AI insights and tips for a team
+ */
+export const getTeamInsights = async (teamId: number, options?: RequestInit): Promise<TeamInsightsResult> => {
+
+  return customFetch<TeamInsightsResult>(getGetTeamInsightsUrl(teamId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTeamInsightsQueryKey = (teamId: number,) => {
+    return [
+    `/api/teams/${teamId}/insights`
+    ] as const;
+    }
+
+
+export const getGetTeamInsightsQueryOptions = <TData = Awaited<ReturnType<typeof getTeamInsights>>, TError = ErrorType<ErrorResponse>>(teamId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTeamInsights>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTeamInsightsQueryKey(teamId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTeamInsights>>> = ({ signal }) => getTeamInsights(teamId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(teamId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTeamInsights>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTeamInsightsQueryResult = NonNullable<Awaited<ReturnType<typeof getTeamInsights>>>
+export type GetTeamInsightsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary AI insights and tips for a team
+ */
+
+export function useGetTeamInsights<TData = Awaited<ReturnType<typeof getTeamInsights>>, TError = ErrorType<ErrorResponse>>(
+ teamId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTeamInsights>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTeamInsightsQueryOptions(teamId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetDashboardSummaryUrl = (params?: GetDashboardSummaryParams,) => {
   const normalizedParams = new URLSearchParams();

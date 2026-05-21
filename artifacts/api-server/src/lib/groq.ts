@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { db } from "@workspace/db";
 import { aiCacheTable } from "@workspace/db";
-import { playersTable, teamsTable } from "@workspace/db";
+import { playersTable, teamsTable, leaguesTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -12,7 +12,10 @@ export function hashPrompt(prompt: string): string {
   return createHash("sha256").update(prompt).digest("hex");
 }
 
-async function callGroq(prompt: string): Promise<string> {
+async function callGroq(
+  prompt: string,
+  opts: { systemPrompt?: string; maxTokens?: number; temperature?: number } = {}
+): Promise<string> {
   const apiKey = process.env["GROQ_API_KEY"];
   if (!apiKey) {
     throw new Error("GROQ_API_KEY is not configured");
@@ -29,15 +32,15 @@ async function callGroq(prompt: string): Promise<string> {
       messages: [
         {
           role: "system",
-          content: "You are an expert fantasy sports analyst. Analyze trades objectively and return valid JSON only.",
+          content: opts.systemPrompt ?? "You are an expert fantasy sports analyst. Analyze trades objectively and return valid JSON only.",
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      temperature: 0.3,
-      max_tokens: 600,
+      temperature: opts.temperature ?? 0.3,
+      max_tokens: opts.maxTokens ?? 600,
     }),
   });
 
@@ -161,4 +164,109 @@ Return ONLY this JSON (no markdown, no extra text):
     id: inserted?.id ?? null,
     evaluatedAt: inserted?.createdAt.toISOString() ?? new Date().toISOString(),
   };
+}
+
+// ── Team Insights ────────────────────────────────────────────────────────────
+
+export interface InsightTip {
+  type: string;
+  priority: string;
+  player?: string | null;
+  message: string;
+}
+
+export interface TeamInsights {
+  teamId: number;
+  teamName: string;
+  insights: string;
+  tips: InsightTip[];
+  standingsRank: number | null;
+  totalTeams: number | null;
+  cached: boolean;
+}
+
+const insightsCache = new Map<string, { result: TeamInsights; expiresAt: number }>();
+const INSIGHTS_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+export async function getTeamInsights(teamId: number): Promise<TeamInsights> {
+  const cacheKey = String(teamId);
+  const now = Date.now();
+  const hit = insightsCache.get(cacheKey);
+  if (hit && hit.expiresAt > now) {
+    return { ...hit.result, cached: true };
+  }
+
+  const [team] = await db.select().from(teamsTable).where(eq(teamsTable.id, teamId));
+  if (!team) throw new Error("Team not found");
+
+  const [leagueRow] = await db.select().from(leaguesTable).where(eq(leaguesTable.id, team.leagueId));
+  const allTeams = await db.select().from(teamsTable).where(eq(teamsTable.leagueId, team.leagueId));
+  const roster = await db.select().from(playersTable).where(eq(playersTable.teamId, teamId));
+
+  const sorted = [...allTeams].sort(
+    (a, b) => b.wins - a.wins || (b.pointsFor ?? 0) - (a.pointsFor ?? 0)
+  );
+  const rank = sorted.findIndex(t => t.id === teamId) + 1;
+
+  const sport = leagueRow?.sport ?? "fantasy";
+  const starters = roster.filter(p => !["BENCH", "IR"].includes(p.position));
+  const bench = roster.filter(p => ["BENCH", "IR"].includes(p.position));
+
+  const formatPlayer = (p: typeof playersTable.$inferSelect) => {
+    const pts = p.totalPoints != null ? ` Pts: ${p.totalPoints.toFixed(1)}` : "";
+    const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? ` [${p.injuryStatus}]` : "";
+    return `${p.fullName} (${p.position}, ${p.proTeam})${pts}${inj}`;
+  };
+
+  const prompt = `Analyze this ${sport} fantasy team and give specific, actionable advice for next season or trades.
+
+LEAGUE: ${leagueRow?.name ?? "Unknown"} — ${sport.toUpperCase()}, ${leagueRow?.season ?? ""} season
+TEAM: "${team.name}" — ${team.wins}W-${team.losses}L${team.ties ? `-${team.ties}T` : ""} | PF: ${team.pointsFor?.toFixed(1) ?? "N/A"} | PA: ${team.pointsAgainst?.toFixed(1) ?? "N/A"}
+STANDINGS: #${rank} of ${allTeams.length}
+
+STARTERS:
+${starters.map(formatPlayer).join("\n")}
+
+BENCH:
+${bench.map(formatPlayer).join("\n") || "None"}
+
+OTHER TEAMS (standings context):
+${sorted.filter(t => t.id !== teamId).slice(0, 8).map((t, i) => `#${i + (i >= rank - 1 ? 2 : 1)} ${t.name}: ${t.wins}W-${t.losses}L, PF: ${t.pointsFor?.toFixed(1) ?? "N/A"}`).join("\n")}
+
+Provide 4-5 specific, actionable tips. Reference real player names from the roster. For trade tips, name who to trade away and what positions to target. For waiver advice, name positions of need.
+
+Return ONLY this JSON (no markdown, no extra text):
+{
+  "insights": "<2-3 sentence overall assessment covering record, roster strengths/weaknesses, and what this team needs>",
+  "tips": [
+    { "type": "<trade|waiver|lineup|general>", "priority": "<high|medium|low>", "player": "<player name or null>", "message": "<specific actionable advice referencing actual players>" }
+  ]
+}`;
+
+  logger.info({ teamId, rank, totalTeams: allTeams.length }, "Calling Groq AI for team insights");
+  const rawResponse = await callGroq(prompt, {
+    systemPrompt: "You are an expert fantasy sports analyst. Give specific, actionable advice. Return valid JSON only.",
+    maxTokens: 900,
+    temperature: 0.4,
+  });
+
+  let parsed: { insights: string; tips: InsightTip[] };
+  try {
+    parsed = JSON.parse(rawResponse);
+  } catch {
+    parsed = { insights: rawResponse, tips: [] };
+  }
+
+  const result: TeamInsights = {
+    teamId,
+    teamName: team.name,
+    insights: parsed.insights ?? "",
+    tips: Array.isArray(parsed.tips) ? parsed.tips : [],
+    standingsRank: rank,
+    totalTeams: allTeams.length,
+    cached: false,
+  };
+
+  insightsCache.set(cacheKey, { result, expiresAt: now + INSIGHTS_TTL_MS });
+  return result;
 }

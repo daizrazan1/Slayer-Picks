@@ -112,6 +112,28 @@ export interface TradeEvalResult {
   evaluatedAt?: string | null;
 }
 
+export interface InsightTip {
+  /** trade, waiver, lineup, or general */
+  type: string;
+  /** high, medium, or low */
+  priority: string;
+  /** @nullable */
+  player?: string | null;
+  message: string;
+}
+
+export interface TeamInsightsResult {
+  teamId: number;
+  teamName: string;
+  insights: string;
+  tips: InsightTip[];
+  /** @nullable */
+  standingsRank?: number | null;
+  /** @nullable */
+  totalTeams?: number | null;
+  cached: boolean;
+}
+
 export interface DashboardSummary {
   leagueCount: number;
   teamCount: number;

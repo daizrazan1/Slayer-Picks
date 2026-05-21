@@ -6,6 +6,7 @@ import leaguesRouter from "./leagues";
 import playersRouter from "./players";
 import tradeRouter from "./trade";
 import dashboardRouter from "./dashboard";
+import insightsRouter from "./insights";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(leaguesRouter);
 router.use(playersRouter);
 router.use(tradeRouter);
 router.use(dashboardRouter);
+router.use(insightsRouter);
 
 export default router;

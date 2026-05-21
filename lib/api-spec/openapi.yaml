@@ -235,6 +235,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /teams/{teamId}/insights:
+    get:
+      operationId: getTeamInsights
+      tags: [teams]
+      summary: AI insights and tips for a team
+      description: Generates AI-powered roster tips, trade suggestions, and waiver advice based on standings and player data
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: AI insights result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamInsightsResult"
+        "404":
+          description: Team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -437,6 +469,42 @@ components:
         evaluatedAt:
           type: ["string", "null"]
           format: date-time
+
+    InsightTip:
+      type: object
+      required: [type, priority, message]
+      properties:
+        type:
+          type: string
+          description: "trade, waiver, lineup, or general"
+        priority:
+          type: string
+          description: "high, medium, or low"
+        player:
+          type: ["string", "null"]
+        message:
+          type: string
+
+    TeamInsightsResult:
+      type: object
+      required: [teamId, teamName, insights, tips, cached]
+      properties:
+        teamId:
+          type: integer
+        teamName:
+          type: string
+        insights:
+          type: string
+        tips:
+          type: array
+          items:
+            $ref: "#/components/schemas/InsightTip"
+        standingsRank:
+          type: ["integer", "null"]
+        totalTeams:
+          type: ["integer", "null"]
+        cached:
+          type: boolean
 
     DashboardSummary:
       type: object

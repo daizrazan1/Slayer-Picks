@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { useListLeagues, useListTeams, useListTeamPlayers } from "@workspace/api-client-react";
+import { useListLeagues, useListTeams, useListTeamPlayers, useGetTeamInsights } from "@workspace/api-client-react";
 import { useSport } from "@/contexts/sport-context";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { TeamAvatar } from "@/components/team-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Sparkles, TrendingUp, ArrowRightLeft, List, AlertTriangle, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 
 export default function MyTeam() {
@@ -44,6 +45,15 @@ export default function MyTeam() {
   const { data: players, isLoading: playersLoading } = useListTeamPlayers(myTeamId ?? 0, {
     query: { enabled: !!myTeamId },
   });
+
+  const [insightsEnabled, setInsightsEnabled] = useState(false);
+  const {
+    data: insights,
+    isLoading: insightsLoading,
+    isError: insightsError,
+    refetch: refetchInsights,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } = useGetTeamInsights(myTeamId ?? 0, { query: { enabled: insightsEnabled && !!myTeamId } } as any);
 
   const handleTeamSelect = (val: string) => {
     const id = parseInt(val, 10);
@@ -162,6 +172,17 @@ export default function MyTeam() {
           ) : (
             <div className="text-center text-muted-foreground p-12">No players found.</div>
           )}
+
+          <AiInsightsPanel
+            insights={insights}
+            isLoading={insightsLoading}
+            isError={insightsError}
+            onGenerate={() => {
+              setInsightsEnabled(true);
+              if (insightsEnabled) refetchInsights();
+            }}
+            hasTeam={!!myTeamId}
+          />
         </div>
       )}
 
@@ -173,6 +194,160 @@ export default function MyTeam() {
         </div>
       )}
     </div>
+  );
+}
+
+const TIP_ICONS: Record<string, React.ReactNode> = {
+  trade: <ArrowRightLeft className="w-4 h-4" />,
+  waiver: <List className="w-4 h-4" />,
+  lineup: <TrendingUp className="w-4 h-4" />,
+  general: <Sparkles className="w-4 h-4" />,
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high: "text-red-400 border-red-400/30 bg-red-400/10",
+  medium: "text-yellow-400 border-yellow-400/30 bg-yellow-400/10",
+  low: "text-blue-400 border-blue-400/30 bg-blue-400/10",
+};
+
+interface InsightTipShape {
+  type: string;
+  priority: string;
+  player?: string | null;
+  message: string;
+}
+
+interface InsightsShape {
+  teamId: number;
+  teamName: string;
+  insights: string;
+  tips: InsightTipShape[];
+  standingsRank?: number | null;
+  totalTeams?: number | null;
+  cached: boolean;
+}
+
+function AiInsightsPanel({
+  insights,
+  isLoading,
+  isError,
+  onGenerate,
+  hasTeam,
+}: {
+  insights: InsightsShape | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  onGenerate: () => void;
+  hasTeam: boolean;
+}) {
+  if (!hasTeam) return null;
+
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="uppercase tracking-wide flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              AI Insights
+            </CardTitle>
+            <CardDescription>Personalised tips based on your roster and standing</CardDescription>
+          </div>
+          {insights && (
+            <Button variant="outline" size="sm" onClick={onGenerate} className="gap-2 uppercase text-xs font-bold tracking-wide">
+              <RefreshCw className="w-3 h-3" />
+              Refresh
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!insights && !isLoading && !isError && (
+          <div className="flex flex-col items-center py-8 gap-4 text-center">
+            <div className="bg-primary/10 rounded-full p-4">
+              <Sparkles className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <p className="font-medium">Get personalised AI tips for your team</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                The AI will analyse your roster, standings, and point totals to give you actionable advice.
+              </p>
+            </div>
+            <Button onClick={onGenerate} className="gap-2 uppercase font-bold tracking-wide">
+              <Sparkles className="w-4 h-4" />
+              Generate Insights
+            </Button>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        )}
+
+        {isError && (
+          <div className="flex flex-col items-center py-8 gap-3 text-center">
+            <AlertTriangle className="w-8 h-8 text-yellow-500" />
+            <p className="text-sm text-muted-foreground">Couldn't load insights right now. Try again in a moment.</p>
+            <Button variant="outline" onClick={onGenerate} size="sm" className="uppercase font-bold tracking-wide">Retry</Button>
+          </div>
+        )}
+
+        {insights && !isLoading && (
+          <div className="space-y-4">
+            {insights.standingsRank != null && insights.totalTeams != null && (
+              <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-secondary/40 border border-border/50">
+                <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
+                <p className="text-sm">
+                  <span className="font-bold">#{insights.standingsRank}</span>
+                  <span className="text-muted-foreground"> of {insights.totalTeams} teams</span>
+                  {insights.standingsRank <= Math.ceil(insights.totalTeams / 2)
+                    ? <span className="text-green-400 ml-2 text-xs font-bold">UPPER HALF</span>
+                    : <span className="text-red-400 ml-2 text-xs font-bold">LOWER HALF</span>}
+                </p>
+              </div>
+            )}
+
+            <div className="px-4 py-3 rounded-lg border border-border/50 bg-background text-sm leading-relaxed">
+              {insights.insights}
+            </div>
+
+            {insights.tips && insights.tips.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Action Items</p>
+                {insights.tips.map((tip: InsightTipShape, i: number) => (
+                  <div key={i} className="flex gap-3 p-3 rounded-lg border border-border/50 bg-background">
+                    <div className={`shrink-0 mt-0.5 p-1.5 rounded border ${PRIORITY_COLORS[tip.priority] ?? "text-muted-foreground border-border bg-secondary"}`}>
+                      {TIP_ICONS[tip.type] ?? <Sparkles className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold uppercase tracking-wide capitalize">{tip.type}</span>
+                        {tip.player && (
+                          <span className="text-xs text-primary font-bold">· {tip.player}</span>
+                        )}
+                        <span className={`ml-auto text-xs font-bold uppercase px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[tip.priority] ?? ""}`}>
+                          {tip.priority}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-snug">{tip.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {insights.cached && (
+              <p className="text-xs text-muted-foreground text-right">Cached result · refreshes every 30 min</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
