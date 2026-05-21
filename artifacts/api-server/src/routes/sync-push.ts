@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 const router: IRouter = Router();
 
 router.post("/sync-espn-push", async (req, res): Promise<void> => {
@@ -112,38 +112,31 @@ async function processEspnData(
       dbTeamId = insertedTeam!.id;
     }
 
-    for (const entry of espnTeam.roster?.entries ?? []) {
-      const player = entry.playerPoolEntry?.player;
-      if (!player) continue;
+    // Wipe the team's roster and re-insert fresh so traded/dropped players are cleared
+    await db.delete(playersTable).where(eq(playersTable.teamId, dbTeamId));
 
-      const playerData = {
-        teamId: dbTeamId,
-        espnPlayerId: String(player.id ?? ""),
-        fullName: player.fullName ?? `Player ${player.id}`,
-        position: getPositionName(entry.lineupSlotId ?? 0, sport),
-        proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
-        projectedPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
-        avgPoints: entry.playerPoolEntry?.averageDraftPosition ?? null,
-        totalPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
-        injuryStatus: player.injuryStatus ?? null,
-      };
+    const entries = espnTeam.roster?.entries ?? [];
+    const playerRows = entries
+      .map((entry) => {
+        const player = entry.playerPoolEntry?.player;
+        if (!player) return null;
+        return {
+          teamId: dbTeamId,
+          espnPlayerId: String(player.id ?? ""),
+          fullName: player.fullName ?? `Player ${player.id}`,
+          position: getPositionName(entry.lineupSlotId ?? 0, sport),
+          proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
+          projectedPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
+          avgPoints: entry.playerPoolEntry?.averageDraftPosition ?? null,
+          totalPoints: entry.playerPoolEntry?.appliedStatTotal ?? null,
+          injuryStatus: player.injuryStatus ?? null,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
 
-      const [existingPlayer] = await db
-        .select()
-        .from(playersTable)
-        .where(
-          and(
-            eq(playersTable.teamId, dbTeamId),
-            eq(playersTable.espnPlayerId, String(player.id ?? ""))
-          )
-        );
-
-      if (existingPlayer) {
-        await db.update(playersTable).set(playerData).where(eq(playersTable.id, existingPlayer.id));
-      } else {
-        await db.insert(playersTable).values(playerData);
-        playersSynced++;
-      }
+    if (playerRows.length > 0) {
+      await db.insert(playersTable).values(playerRows);
+      playersSynced += playerRows.length;
     }
   }
 
