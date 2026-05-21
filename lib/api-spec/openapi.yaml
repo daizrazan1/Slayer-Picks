@@ -287,6 +287,9 @@ components:
         leagueId:
           type: ["integer", "null"]
           description: Optional ESPN league ID to sync
+        sport:
+          type: ["string", "null"]
+          description: "Sport type: football, basketball, baseball, hockey (auto-detected if omitted)"
 
     SyncResult:
       type: object

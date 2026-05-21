@@ -24,7 +24,8 @@ export const HealthCheckResponse = zod.object({
 export const SyncEspnBody = zod.object({
   "s2": zod.string().describe('ESPN espn_s2 cookie value'),
   "swid": zod.string().describe('ESPN SWID cookie value'),
-  "leagueId": zod.number().nullish().describe('Optional ESPN league ID to sync')
+  "leagueId": zod.number().nullish().describe('Optional ESPN league ID to sync'),
+  "sport": zod.string().nullish().describe('Sport type: football, basketball, baseball, hockey (auto-detected if omitted)')
 })
 
 export const SyncEspnResponse = zod.object({

@@ -16,4 +16,9 @@ export interface EspnSyncInput {
      * @nullable
      */
   leagueId?: number | null;
+  /**
+     * Sport type: football, basketball, baseball, hockey (auto-detected if omitted)
+     * @nullable
+     */
+  sport?: string | null;
 }
