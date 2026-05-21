@@ -3,13 +3,26 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Fantasy Helper API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: sync
+    description: ESPN sync operations
+  - name: leagues
+    description: League operations
+  - name: teams
+    description: Team operations
+  - name: players
+    description: Player operations
+  - name: trade
+    description: AI Trade Lab operations
+  - name: dashboard
+    description: Dashboard summary operations
+
 paths:
   /healthz:
     get:
@@ -24,13 +37,408 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /sync-espn:
+    post:
+      operationId: syncEspn
+      tags: [sync]
+      summary: Sync ESPN fantasy data
+      description: Accepts espn_s2 and SWID tokens, fetches and caches ESPN data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EspnSyncInput"
+      responses:
+        "200":
+          description: Sync successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leagues:
+    get:
+      operationId: listLeagues
+      tags: [leagues]
+      summary: List all leagues
+      responses:
+        "200":
+          description: List of leagues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/League"
+
+  /leagues/{id}:
+    get:
+      operationId: getLeague
+      tags: [leagues]
+      summary: Get a league by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: League detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leagues/{leagueId}/teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List teams in a league
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+
+  /teams/{id}:
+    get:
+      operationId: getTeam
+      tags: [teams]
+      summary: Get a team by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Team detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /teams/{teamId}/players:
+    get:
+      operationId: listTeamPlayers
+      tags: [players]
+      summary: List players on a team
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of players
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+
+  /players:
+    get:
+      operationId: listPlayers
+      tags: [players]
+      summary: List all cached players
+      parameters:
+        - name: leagueId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: position
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of players
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+
+  /trade/evaluate:
+    post:
+      operationId: evaluateTrade
+      tags: [trade]
+      summary: AI trade evaluator
+      description: Evaluates a trade using Groq AI with cached roster context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeEvalInput"
+      responses:
+        "200":
+          description: Trade evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeEvalResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      description: Returns counts, last sync time, top players, and league overview
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-trades:
+    get:
+      operationId: listRecentTrades
+      tags: [dashboard]
+      summary: List recent AI trade evaluations
+      responses:
+        "200":
+          description: Recent trade evaluations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradeEvalResult"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    EspnSyncInput:
+      type: object
+      required: [s2, swid]
+      properties:
+        s2:
+          type: string
+          description: ESPN espn_s2 cookie value
+        swid:
+          type: string
+          description: ESPN SWID cookie value
+        leagueId:
+          type: ["integer", "null"]
+          description: Optional ESPN league ID to sync
+
+    SyncResult:
+      type: object
+      required: [success, message, leaguesSynced, playersSynced]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        leaguesSynced:
+          type: integer
+        playersSynced:
+          type: integer
+        lastSyncAt:
+          type: string
+          format: date-time
+
+    League:
+      type: object
+      required: [id, espnLeagueId, name, season, sport, syncedAt]
+      properties:
+        id:
+          type: integer
+        espnLeagueId:
+          type: string
+        name:
+          type: string
+        season:
+          type: integer
+        sport:
+          type: string
+        teamCount:
+          type: ["integer", "null"]
+        syncedAt:
+          type: string
+          format: date-time
+
+    Team:
+      type: object
+      required: [id, leagueId, espnTeamId, name, abbrev, wins, losses]
+      properties:
+        id:
+          type: integer
+        leagueId:
+          type: integer
+        espnTeamId:
+          type: string
+        name:
+          type: string
+        abbrev:
+          type: string
+        wins:
+          type: integer
+        losses:
+          type: integer
+        ties:
+          type: integer
+        pointsFor:
+          type: ["number", "null"]
+        pointsAgainst:
+          type: ["number", "null"]
+        waiversPosition:
+          type: ["integer", "null"]
+
+    Player:
+      type: object
+      required: [id, teamId, espnPlayerId, fullName, position, proTeam]
+      properties:
+        id:
+          type: integer
+        teamId:
+          type: integer
+        espnPlayerId:
+          type: string
+        fullName:
+          type: string
+        position:
+          type: string
+        proTeam:
+          type: string
+        projectedPoints:
+          type: ["number", "null"]
+        avgPoints:
+          type: ["number", "null"]
+        totalPoints:
+          type: ["number", "null"]
+        injuryStatus:
+          type: ["string", "null"]
+
+    TradeEvalInput:
+      type: object
+      required: [teamAId, teamBId, teamAPlayers, teamBPlayers]
+      properties:
+        teamAId:
+          type: integer
+        teamBId:
+          type: integer
+        teamAPlayers:
+          type: array
+          items:
+            type: integer
+          description: Player IDs Team A is giving up
+        teamBPlayers:
+          type: array
+          items:
+            type: integer
+          description: Player IDs Team B is giving up
+
+    TradeEvalResult:
+      type: object
+      required: [winScoreA, winScoreB, analysis, recommendation, cached]
+      properties:
+        id:
+          type: ["integer", "null"]
+        winScoreA:
+          type: number
+          description: Win score for Team A (0-100)
+        winScoreB:
+          type: number
+          description: Win score for Team B (0-100)
+        analysis:
+          type: string
+          description: AI-generated analysis of the trade
+        recommendation:
+          type: string
+          description: Accept, Decline, or Neutral
+        teamAName:
+          type: ["string", "null"]
+        teamBName:
+          type: ["string", "null"]
+        cached:
+          type: boolean
+        evaluatedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    DashboardSummary:
+      type: object
+      required: [leagueCount, teamCount, playerCount, tradeEvalCount]
+      properties:
+        leagueCount:
+          type: integer
+        teamCount:
+          type: integer
+        playerCount:
+          type: integer
+        tradeEvalCount:
+          type: integer
+        lastSyncAt:
+          type: ["string", "null"]
+          format: date-time
+        topPlayers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Player"

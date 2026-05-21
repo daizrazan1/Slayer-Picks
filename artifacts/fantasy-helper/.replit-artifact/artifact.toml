@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Fantasy Helper"
+version = "1.0.0"
+id = "artifacts/fantasy-helper"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25705
+
+[services.development]
+run = "pnpm --filter @workspace/fantasy-helper run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fantasy-helper", "run", "build" ]
+publicDir = "artifacts/fantasy-helper/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25705"
+BASE_PATH = "/"
