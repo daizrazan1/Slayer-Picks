@@ -41,23 +41,25 @@ export default function Sync() {
     `var sport=sports[gid]||'football';` +
     `var lid=new URLSearchParams(location.search).get('leagueId');` +
     `if(!lid){alert('Navigate to your ESPN Fantasy league page first, then click the bookmarklet.');return;}` +
-    `var yr=new Date().getFullYear();` +
+    `var now=new Date();var mo=now.getMonth();var cy=now.getFullYear();` +
+    `var yr=(gid==='fba'||gid==='fhl')?(mo<8?cy-1:cy):(gid==='ffl')?(mo<7?cy-1:cy):cy;` +
     `var urls=[` +
     `'https://lm-api-reads.fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings',` +
     `'https://fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings'` +
     `];` +
-    `function tryNext(i){` +
-    `if(i>=urls.length){alert('Could not reach ESPN API. Make sure you are logged into ESPN and on your league page.');return;}` +
-    `fetch(urls[i],{credentials:'include',headers:{Accept:'application/json'}})` +
-    `.then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})` +
-    `.then(function(data){` +
-    `return fetch('${appOrigin}/api/sync-espn-push',{` +
+    `function sendData(data){` +
+    `fetch('${appOrigin}/api/sync-espn-push',{` +
     `method:'POST',` +
     `headers:{'Content-Type':'application/json'},` +
     `body:JSON.stringify({espnData:data,sport:sport,leagueId:parseInt(lid)})` +
-    `});})` +
-    `.then(function(r){return r.json();})` +
+    `}).then(function(r){return r.json();})` +
     `.then(function(d){alert(d.message||'Sync complete!');})` +
+    `.catch(function(e){alert('ESPN data fetched but could not reach Fantasy Helper. Error: '+e.message);});}` +
+    `function tryNext(i){` +
+    `if(i>=urls.length){alert('Could not reach ESPN API. Make sure you are logged into ESPN, on your league page, and that the URL contains ?leagueId=');return;}` +
+    `fetch(urls[i],{credentials:'include',headers:{Accept:'application/json'}})` +
+    `.then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})` +
+    `.then(function(data){sendData(data);})` +
     `.catch(function(){tryNext(i+1);});}` +
     `tryNext(0);` +
     `})();`;
