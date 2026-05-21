@@ -42,7 +42,7 @@ export default function Sync() {
     `var lid=new URLSearchParams(location.search).get('leagueId');` +
     `if(!lid){alert('Navigate to your ESPN Fantasy league page first, then click the bookmarklet.');return;}` +
     `var now=new Date();var mo=now.getMonth();var cy=now.getFullYear();` +
-    `var yr=(gid==='fba'||gid==='fhl')?(mo<8?cy-1:cy):(gid==='ffl')?(mo<7?cy-1:cy):cy;` +
+    `var yr=(gid==='fba'||gid==='fhl')?(mo>=9?cy+1:cy):(gid==='ffl')?(mo>=7?cy:cy-1):cy;` +
     `var urls=[` +
     `'https://lm-api-reads.fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings',` +
     `'https://fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings'` +
