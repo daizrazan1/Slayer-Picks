@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useListLeagues, useListTeams, useListTeamPlayers,
   useEvaluateTrade, useFindTrades, useEnrichTeamPlayers,
-  getListTeamPlayersQueryKey,
 } from "@workspace/api-client-react";
 import type { EspnPublicStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -257,10 +256,10 @@ export default function TradeLab() {
     enrichedTeams.current.add(teamId);
     enrichMutation.mutate({ teamId }, {
       onSuccess: () => {
-        // Refetch after ~20s to give enrichment time to complete
+        // Refetch after 8s — enrichment runs at 100ms/player so ~15 players = ~1.5s
         setTimeout(() => {
-          qc.invalidateQueries({ queryKey: getListTeamPlayersQueryKey(teamId) });
-        }, 20000);
+          qc.invalidateQueries({ queryKey: ["listTeamPlayers", teamId] });
+        }, 8000);
       },
     });
   };

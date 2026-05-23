@@ -150,7 +150,7 @@ router.post("/teams/:teamId/enrich", requireAuth, async (req, res): Promise<void
           await db.update(playersTable).set({ espnPublicStats: stats }).where(eq(playersTable.id, player.id));
         }
       } catch { /* ignore individual failures */ }
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 100));
     }
   })().catch((err: unknown) => {
     req.log.error({ err, teamId }, "Team enrichment failed");
