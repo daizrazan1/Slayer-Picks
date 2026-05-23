@@ -4,11 +4,13 @@ import { leaguesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { runAutoSync, type SyncSummary } from "../lib/auto-sync-runner";
+import { requireAuth } from "../middleware/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/sync/status", async (_req, res): Promise<void> => {
-  const leagues = await db.select().from(leaguesTable);
+router.get("/sync/status", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.session.userId!;
+  const leagues = await db.select().from(leaguesTable).where(eq(leaguesTable.userId, userId));
 
   const hasCredentials = leagues.some(l => l.autoSyncEnabled && l.espnS2 && l.swid);
 
@@ -25,10 +27,12 @@ router.get("/sync/status", async (_req, res): Promise<void> => {
   });
 });
 
-router.post("/sync/refresh", async (req, res): Promise<void> => {
+router.post("/sync/refresh", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.session.userId!;
   const leagues = await db
     .select()
     .from(leaguesTable)
+    .where(eq(leaguesTable.userId, userId))
     .then(rows => rows.filter(l => l.autoSyncEnabled && l.espnS2 && l.swid));
 
   if (leagues.length === 0) {

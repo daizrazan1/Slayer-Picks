@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { EvaluateTradeBody, EvaluateTradeResponse, FindTradesBody, FindTradesResponse } from "@workspace/api-zod";
 import { evaluateTrade, findTrades } from "../lib/groq";
+import { requireAuth } from "../middleware/requireAuth";
 
 const router: IRouter = Router();
 
-router.post("/trade/evaluate", async (req, res): Promise<void> => {
+router.post("/trade/evaluate", requireAuth, async (req, res): Promise<void> => {
   const parsed = EvaluateTradeBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -27,7 +28,7 @@ router.post("/trade/evaluate", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/trade/find", async (req, res): Promise<void> => {
+router.post("/trade/find", requireAuth, async (req, res): Promise<void> => {
   const parsed = FindTradesBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

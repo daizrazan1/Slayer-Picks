@@ -4,6 +4,7 @@ import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { SyncEspnBody, SyncEspnResponse } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
+import { requireAuth } from "../middleware/requireAuth";
 
 const router: IRouter = Router();
 
@@ -21,7 +22,7 @@ const ALL_GAME_IDS = [
   { gameId: "fhl", sport: "hockey" },
 ];
 
-router.post("/sync-espn", async (req, res): Promise<void> => {
+router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
   const parsed = SyncEspnBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -29,6 +30,7 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
   }
 
   const { s2, swid, leagueId, sport } = parsed.data;
+  const userId = req.session.userId!;
 
   if (!leagueId) {
     res.status(400).json({
@@ -50,7 +52,7 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
       const [existing] = await db
         .select()
         .from(leaguesTable)
-        .where(eq(leaguesTable.espnLeagueId, String(espnLeague.id)));
+        .where(and(eq(leaguesTable.espnLeagueId, String(espnLeague.id)), eq(leaguesTable.userId, userId)));
 
       let dbLeagueId: number;
 
@@ -73,6 +75,7 @@ router.post("/sync-espn", async (req, res): Promise<void> => {
         const [inserted] = await db
           .insert(leaguesTable)
           .values({
+            userId,
             espnLeagueId: String(espnLeague.id),
             name: espnLeague.settings?.name ?? `League ${espnLeague.id}`,
             season: espnLeague.seasonId ?? new Date().getFullYear(),

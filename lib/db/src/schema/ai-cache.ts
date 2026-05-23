@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const aiCacheTable = pgTable("ai_cache", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id"),
   promptHash: text("prompt_hash").notNull().unique(),
   prompt: text("prompt").notNull(),
   response: text("response").notNull(),

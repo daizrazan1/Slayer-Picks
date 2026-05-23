@@ -1,13 +1,14 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Trophy, ArrowRightLeft, Settings, LayoutDashboard, Menu, Users, BarChart2, List } from "lucide-react";
+import { Activity, Trophy, ArrowRightLeft, Settings, LayoutDashboard, Menu, Users, BarChart2, List, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSport, SPORTS } from "@/contexts/sport-context";
+import { useAuth } from "@/contexts/auth-context";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/my-team", label: "My Team", icon: Users },
   { href: "/leagues", label: "Leagues", icon: Trophy },
   { href: "/standings", label: "Standings", icon: BarChart2 },
@@ -35,20 +36,41 @@ function SportSelector() {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { user, logout } = useAuth();
 
-  const NavLinks = () => (
+  const handleLogout = async () => {
+    await logout();
+    setLocation("/");
+  };
+
+  const NavLinks = ({ onNavigate }: { onNavigate?: () => void }) => (
     <>
       {NAV_ITEMS.map((item) => {
-        const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+        const isActive = location === item.href || (item.href !== "/dashboard" && location.startsWith(item.href));
         return (
-          <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-all text-sm font-medium ${isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-all text-sm font-medium ${isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
+          >
             <item.icon className="w-5 h-5" />
             {item.label}
           </Link>
         );
       })}
     </>
+  );
+
+  const LogoutButton = () => (
+    <button
+      onClick={handleLogout}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-md transition-all text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground w-full text-left"
+    >
+      <LogOut className="w-5 h-5" />
+      Log Out
+    </button>
   );
 
   return (
@@ -67,6 +89,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 px-4 space-y-1 mt-2">
           <NavLinks />
         </nav>
+        <div className="px-4 pb-4 pt-2 border-t border-border mt-2">
+          {user && (
+            <p className="text-xs text-muted-foreground px-3 mb-2 truncate">{user.displayName}</p>
+          )}
+          <LogoutButton />
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -86,7 +114,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <Menu className="w-5 h-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0 bg-card border-r-border">
+              <SheetContent side="left" className="w-64 p-0 bg-card border-r-border flex flex-col">
                 <div className="p-6 pb-3 flex items-center gap-3">
                   <div className="bg-primary text-primary-foreground p-1.5 rounded-md">
                     <Activity className="w-6 h-6" />
@@ -96,9 +124,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <div className="px-4 pb-4">
                   <SportSelector />
                 </div>
-                <nav className="px-4 space-y-1 mt-2">
+                <nav className="flex-1 px-4 space-y-1 mt-2">
                   <NavLinks />
                 </nav>
+                <div className="px-4 pb-6 pt-2 border-t border-border mt-2">
+                  {user && (
+                    <p className="text-xs text-muted-foreground px-3 mb-2 truncate">{user.displayName}</p>
+                  )}
+                  <LogoutButton />
+                </div>
               </SheetContent>
             </Sheet>
           </div>

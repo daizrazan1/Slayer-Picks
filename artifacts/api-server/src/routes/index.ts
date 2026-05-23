@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import syncRouter from "./sync";
 import syncPushRouter from "./sync-push";
 import autoSyncRouter from "./auto-sync";
@@ -12,6 +13,7 @@ import insightsRouter from "./insights";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(syncRouter);
 router.use(syncPushRouter);
 router.use(autoSyncRouter);

@@ -2,11 +2,12 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { playersTable, teamsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { requireAuth } from "../middleware/requireAuth";
 import { ListPlayersQueryParams, ListPlayersResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-router.get("/players", async (req, res): Promise<void> => {
+router.get("/players", requireAuth, async (req, res): Promise<void> => {
   const query = ListPlayersQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });

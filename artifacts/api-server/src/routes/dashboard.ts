@@ -1,17 +1,19 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable, aiCacheTable } from "@workspace/db";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, inArray, and } from "drizzle-orm";
+import { requireAuth } from "../middleware/requireAuth";
 import { GetDashboardSummaryResponse, ListRecentTradesResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (req, res): Promise<void> => {
+router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   const sport = typeof req.query.sport === "string" ? req.query.sport : undefined;
+  const userId = req.session.userId!;
 
   const leagues = await (sport
-    ? db.select().from(leaguesTable).where(eq(leaguesTable.sport, sport))
-    : db.select().from(leaguesTable));
+    ? db.select().from(leaguesTable).where(and(eq(leaguesTable.userId, userId), eq(leaguesTable.sport, sport)))
+    : db.select().from(leaguesTable).where(eq(leaguesTable.userId, userId)));
 
   const leagueIds = leagues.map(l => l.id);
 
@@ -19,7 +21,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     leagueIds.length > 0
       ? db.select().from(teamsTable).where(inArray(teamsTable.leagueId, leagueIds))
       : Promise.resolve([]),
-    db.select().from(aiCacheTable),
+    db.select().from(aiCacheTable).where(eq(aiCacheTable.userId, userId)),
   ]);
 
   const teamIds = teams.map(t => t.id);
@@ -49,10 +51,12 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   res.json(summary);
 });
 
-router.get("/dashboard/recent-trades", async (_req, res): Promise<void> => {
+router.get("/dashboard/recent-trades", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.session.userId!;
   const recent = await db
     .select()
     .from(aiCacheTable)
+    .where(eq(aiCacheTable.userId, userId))
     .orderBy(desc(aiCacheTable.createdAt))
     .limit(10);
 
@@ -79,13 +83,14 @@ router.get("/dashboard/recent-trades", async (_req, res): Promise<void> => {
   res.json(ListRecentTradesResponse.parse(mapped));
 });
 
-router.delete("/dashboard/recent-trades/:id", async (req, res): Promise<void> => {
-  const id = parseInt(req.params["id"] ?? "", 10);
+router.delete("/dashboard/recent-trades/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const deleted = await db.delete(aiCacheTable).where(eq(aiCacheTable.id, id)).returning();
+  const userId = req.session.userId!;
+  const deleted = await db.delete(aiCacheTable).where(and(eq(aiCacheTable.id, id), eq(aiCacheTable.userId, userId))).returning();
   if (deleted.length === 0) {
     res.status(404).json({ error: "Trade not found" });
     return;
@@ -93,8 +98,9 @@ router.delete("/dashboard/recent-trades/:id", async (req, res): Promise<void> =>
   res.json({ success: true, deleted: deleted.length });
 });
 
-router.delete("/dashboard/recent-trades", async (_req, res): Promise<void> => {
-  const result = await db.delete(aiCacheTable).returning({ id: aiCacheTable.id });
+router.delete("/dashboard/recent-trades", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.session.userId!;
+  const result = await db.delete(aiCacheTable).where(eq(aiCacheTable.userId, userId)).returning({ id: aiCacheTable.id });
   res.json({ success: true, deleted: result.length });
 });
 

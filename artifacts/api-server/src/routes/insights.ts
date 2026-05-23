@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { getTeamInsights } from "../lib/groq";
+import { requireAuth } from "../middleware/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/teams/:teamId/insights", async (req, res): Promise<void> => {
-  const teamId = parseInt(req.params["teamId"] ?? "", 10);
+router.get("/teams/:teamId/insights", requireAuth, async (req, res): Promise<void> => {
+  const teamId = parseInt(String(req.params["teamId"] ?? ""), 10);
   if (isNaN(teamId)) {
     res.status(400).json({ error: "Invalid teamId" });
     return;

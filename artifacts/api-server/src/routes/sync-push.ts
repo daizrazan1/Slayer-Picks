@@ -2,14 +2,16 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
+import { requireAuth } from "../middleware/requireAuth";
 const router: IRouter = Router();
 
-router.post("/sync-espn-push", async (req, res): Promise<void> => {
+router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
   const body = req.body as { sport?: unknown; leagueId?: unknown; espnData?: unknown };
 
   const sport = typeof body.sport === "string" ? body.sport : "basketball";
   const leagueId = typeof body.leagueId === "number" ? body.leagueId : parseInt(String(body.leagueId ?? ""), 10);
   const espnData = body.espnData as Record<string, unknown> | undefined;
+  const userId = req.session.userId!;
 
   if (!leagueId || isNaN(leagueId)) {
     res.status(400).json({ error: "leagueId is required and must be a number" });
@@ -23,7 +25,7 @@ router.post("/sync-espn-push", async (req, res): Promise<void> => {
   req.log.info({ leagueId, sport }, "Processing browser-pushed ESPN data");
 
   try {
-    const result = await processEspnData(espnData, leagueId, sport);
+    const result = await processEspnData(espnData, leagueId, sport, userId);
 
     res.json({
       success: true,
@@ -41,7 +43,8 @@ router.post("/sync-espn-push", async (req, res): Promise<void> => {
 async function processEspnData(
   raw: Record<string, unknown>,
   leagueId: number,
-  sport: string
+  sport: string,
+  userId: number
 ): Promise<{ leaguesSynced: number; playersSynced: number }> {
   const teams = (raw["teams"] as EspnTeamData[] | undefined) ?? [];
   const settings = raw["settings"] as { name?: string } | undefined;
@@ -52,7 +55,7 @@ async function processEspnData(
   const [existing] = await db
     .select()
     .from(leaguesTable)
-    .where(eq(leaguesTable.espnLeagueId, String(leagueId)));
+    .where(and(eq(leaguesTable.espnLeagueId, String(leagueId)), eq(leaguesTable.userId, userId)));
 
   let dbLeagueId: number;
 
@@ -66,6 +69,7 @@ async function processEspnData(
     const [inserted] = await db
       .insert(leaguesTable)
       .values({
+        userId,
         espnLeagueId: String(leagueId),
         name: leagueName,
         season: seasonId,
