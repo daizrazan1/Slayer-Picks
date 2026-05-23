@@ -66,6 +66,18 @@ export interface Team {
   waiversPosition?: number | null;
 }
 
+export type EspnPublicStatsStatLine = {[key: string]: number};
+
+export interface EspnPublicStats {
+  gamesPlayed: number;
+  statLine: EspnPublicStatsStatLine;
+  /** @nullable */
+  injuryDescription?: string | null;
+  /** @nullable */
+  recentHeadline?: string | null;
+  fetchedAt: string;
+}
+
 export interface Player {
   id: number;
   teamId: number;
@@ -81,6 +93,7 @@ export interface Player {
   totalPoints?: number | null;
   /** @nullable */
   injuryStatus?: string | null;
+  espnPublicStats?: EspnPublicStats | null;
 }
 
 export interface TradeFindInput {

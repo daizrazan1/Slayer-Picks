@@ -22,9 +22,8 @@ export default function Standings() {
     }
   }, [leagues]);
 
-  const { data: teams, isLoading: teamsLoading } = useListTeams(leagueId ?? 0, {
-    query: { enabled: !!leagueId },
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: teams, isLoading: teamsLoading } = useListTeams(leagueId ?? 0, { query: { enabled: !!leagueId } } as any);
 
   const sorted = [...(teams ?? [])].sort((a, b) => {
     if (b.wins !== a.wins) return b.wins - a.wins;

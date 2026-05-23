@@ -4,6 +4,7 @@ import { aiCacheTable } from "@workspace/db";
 import { playersTable, teamsTable, leaguesTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
+import { formatStatLine } from "./espn-public";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL_FAST = "llama-3.1-8b-instant";
@@ -91,19 +92,35 @@ export async function evaluateTrade(
     ? await db.select().from(playersTable).where(inArray(playersTable.id, teamBPlayerIds))
     : [];
 
-  // Compute per-game averages using the top scorer across both rosters as the games-played benchmark
+  // Compute per-game averages as fallback when ESPN public stats aren't available yet
   const allRosterPlayers = [...allTeamAPlayers, ...allTeamBPlayers];
   const leagueMaxPts = Math.max(...allRosterPlayers.map(p => p.totalPoints ?? 0), 1);
   const estimatedGames = Math.max(1, Math.round(leagueMaxPts / 68));
+
+  const [league] = teamA.leagueId
+    ? await db.select({ sport: leaguesTable.sport }).from(leaguesTable).where(eq(leaguesTable.id, teamA.leagueId))
+    : [{ sport: "basketball" }];
+  const sport = league?.sport ?? "basketball";
 
   const ppg = (p: typeof playersTable.$inferSelect) =>
     p.totalPoints != null ? (p.totalPoints / estimatedGames).toFixed(1) : null;
 
   const formatPlayer = (p: typeof playersTable.$inferSelect) => {
-    const avg = ppg(p);
-    const pts = avg ? `${avg} ppg (${p.totalPoints?.toFixed(0)} season pts)` : "no pts data";
+    let statsStr: string;
+    if (p.espnPublicStats && p.espnPublicStats.gamesPlayed > 0) {
+      statsStr = formatStatLine(p.espnPublicStats, sport, p.position);
+      if (p.espnPublicStats.recentHeadline) {
+        statsStr += ` | News: ${p.espnPublicStats.recentHeadline}`;
+      }
+    } else {
+      const avg = ppg(p);
+      statsStr = avg ? `~${avg} ppg est (${p.totalPoints?.toFixed(0)} season pts)` : "no pts data";
+    }
     const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? ` [${p.injuryStatus}]` : "";
-    return `  • ${p.fullName} (${p.position}, ${p.proTeam}) — ${pts}${inj}`;
+    if (p.espnPublicStats?.injuryDescription) {
+      return `  • ${p.fullName} (${p.position}, ${p.proTeam}) — ${statsStr}${inj} [Injury: ${p.espnPublicStats.injuryDescription}]`;
+    }
+    return `  • ${p.fullName} (${p.position}, ${p.proTeam}) — ${statsStr}${inj}`;
   };
 
   const combinedPpg = (players: typeof givingUpA) =>
@@ -278,6 +295,11 @@ export async function findTrades(
     });
   }
 
+  const leagueRow = allLeaguePlayers.length > 0
+    ? await db.select({ sport: leaguesTable.sport }).from(leaguesTable).where(eq(leaguesTable.id, leagueId)).then(r => r[0])
+    : null;
+  const sport = leagueRow?.sport ?? "basketball";
+
   // Ultra-compact format: keep lines short to stay within Groq payload limit
   // Tier abbreviations: E=ELITE S=STRONG A=AVERAGE W=WEAK
   const tierAbbr = (t: string) => t[0] ?? "?";
@@ -286,7 +308,10 @@ export async function findTrades(
     const avg = meta ? `${meta.avgPerGame}ppg` : (p.totalPoints != null ? `${p.totalPoints.toFixed(0)}tot` : "?");
     const rank = meta ? `#${meta.rank}${normPos(p.position)}[${tierAbbr(meta.tier)}]` : "";
     const inj = p.injuryStatus && !["ACTIVE", "NORMAL"].includes(p.injuryStatus) ? `!${p.injuryStatus}` : "";
-    return `${p.fullName}(${p.position}) ${avg} ${rank}${inj}`;
+    const realStats = p.espnPublicStats && p.espnPublicStats.gamesPlayed > 0
+      ? ` [${formatStatLine(p.espnPublicStats, sport, p.position)}]`
+      : "";
+    return `${p.fullName}(${p.position}) ${avg} ${rank}${inj}${realStats}`;
   };
 
   const valueRatio = (100 / fairness).toFixed(1);

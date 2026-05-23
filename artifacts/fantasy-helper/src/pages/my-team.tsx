@@ -84,13 +84,10 @@ export default function MyTeam() {
     setMyTeamId(saved ? parseInt(saved, 10) : null);
   }, [sport, storageKey]);
 
-  const { data: teams, isLoading: teamsLoading } = useListTeams(leagueId ?? 0, {
-    query: { enabled: !!leagueId },
-  });
-
-  const { data: players, isLoading: playersLoading } = useListTeamPlayers(myTeamId ?? 0, {
-    query: { enabled: !!myTeamId },
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: teams, isLoading: teamsLoading } = useListTeams(leagueId ?? 0, { query: { enabled: !!leagueId } } as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: players, isLoading: playersLoading } = useListTeamPlayers(myTeamId ?? 0, { query: { enabled: !!myTeamId } } as any);
 
   const [insightsEnabled, setInsightsEnabled] = useState(false);
   const {

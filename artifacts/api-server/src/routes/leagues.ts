@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
 import { eq, inArray, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
+import { enrichLeaguePlayers } from "../lib/espn-public";
 import {
   GetLeagueParams,
   GetLeagueResponse,
@@ -39,6 +40,27 @@ router.get("/leagues/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   res.json(GetLeagueResponse.parse(league));
+});
+
+router.post("/leagues/:id/enrich", requireAuth, async (req, res): Promise<void> => {
+  const params = GetLeagueParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const userId = req.session.userId!;
+  const [league] = await db
+    .select()
+    .from(leaguesTable)
+    .where(and(eq(leaguesTable.id, params.data.id), eq(leaguesTable.userId, userId)));
+  if (!league) {
+    res.status(404).json({ error: "League not found" });
+    return;
+  }
+  res.json({ success: true, message: "Enrichment started in background" });
+  enrichLeaguePlayers(league.id, league.sport).catch((err: unknown) => {
+    req.log.error({ err, leagueId: league.id }, "Background enrichment failed");
+  });
 });
 
 router.delete("/leagues/:id", requireAuth, async (req, res): Promise<void> => {

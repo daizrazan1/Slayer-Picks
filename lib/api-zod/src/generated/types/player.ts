@@ -5,6 +5,7 @@
  * Fantasy Helper API
  * OpenAPI spec version: 0.1.0
  */
+import type { EspnPublicStats } from './espnPublicStats';
 
 export interface Player {
   id: number;
@@ -21,4 +22,5 @@ export interface Player {
   totalPoints?: number | null;
   /** @nullable */
   injuryStatus?: string | null;
+  espnPublicStats?: EspnPublicStats | null;
 }

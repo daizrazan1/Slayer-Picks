@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { SyncEspnBody, SyncEspnResponse } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/requireAuth";
+import { enrichLeaguePlayers } from "../lib/espn-public";
 
 const router: IRouter = Router();
 
@@ -170,6 +171,18 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
     });
 
     res.json(result);
+
+    for (const espnLeague of espnLeagues) {
+      const [saved] = await db
+        .select({ id: leaguesTable.id, sport: leaguesTable.sport })
+        .from(leaguesTable)
+        .where(and(eq(leaguesTable.espnLeagueId, String(espnLeague.id)), eq(leaguesTable.userId, userId)));
+      if (saved) {
+        enrichLeaguePlayers(saved.id, saved.sport).catch((err: unknown) => {
+          logger.error({ err, leagueId: saved.id }, "Background enrichment failed after direct sync");
+        });
+      }
+    }
   } catch (err) {
     req.log.error({ err }, "ESPN sync failed");
     res.status(400).json({ error: err instanceof Error ? err.message : "Sync failed" });

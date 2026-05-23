@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
+import { enrichLeaguePlayers } from "../lib/espn-public";
 const router: IRouter = Router();
 
 router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
@@ -34,6 +35,9 @@ router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
       playersSynced: result.playersSynced,
       lastSyncAt: new Date().toISOString(),
     });
+    enrichLeaguePlayers(result.dbLeagueId, sport).catch((err: unknown) => {
+      req.log.error({ err, leagueId: result.dbLeagueId }, "Background enrichment failed after push sync");
+    });
   } catch (err) {
     req.log.error({ err }, "ESPN push sync failed");
     res.status(400).json({ error: err instanceof Error ? err.message : "Sync failed" });
@@ -45,7 +49,7 @@ async function processEspnData(
   leagueId: number,
   sport: string,
   userId: number
-): Promise<{ leaguesSynced: number; playersSynced: number }> {
+): Promise<{ leaguesSynced: number; playersSynced: number; dbLeagueId: number }> {
   const teams = (raw["teams"] as EspnTeamData[] | undefined) ?? [];
   const settings = raw["settings"] as { name?: string } | undefined;
   const seasonId = (raw["seasonId"] as number | undefined) ?? new Date().getFullYear();
@@ -144,7 +148,7 @@ async function processEspnData(
     }
   }
 
-  return { leaguesSynced: 1, playersSynced };
+  return { leaguesSynced: 1, playersSynced, dbLeagueId };
 }
 
 interface EspnTeamData {

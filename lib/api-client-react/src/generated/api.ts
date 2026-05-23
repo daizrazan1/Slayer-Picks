@@ -435,6 +435,77 @@ export function useListLeagues<TData = Awaited<ReturnType<typeof listLeagues>>, 
 
 
 
+export const getEnrichLeagueUrl = (id: number,) => {
+
+
+
+
+  return `/api/leagues/${id}/enrich`
+}
+
+/**
+ * Fetches real per-game stats, injury context, and recent news from the public ESPN API for every player in the league. Runs asynchronously — returns immediately.
+ * @summary Enrich all players in a league with ESPN public stats
+ */
+export const enrichLeague = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getEnrichLeagueUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getEnrichLeagueMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enrichLeague>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof enrichLeague>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['enrichLeague'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof enrichLeague>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  enrichLeague(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EnrichLeagueMutationResult = NonNullable<Awaited<ReturnType<typeof enrichLeague>>>
+
+    export type EnrichLeagueMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Enrich all players in a league with ESPN public stats
+ */
+export const useEnrichLeague = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enrichLeague>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof enrichLeague>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getEnrichLeagueMutationOptions(options));
+    }
+
 export const getGetLeagueUrl = (id: number,) => {
 
 

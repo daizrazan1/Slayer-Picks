@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useSyncEspn } from "@workspace/api-client-react";
+import { useSyncEspn, useListLeagues, useEnrichLeague } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Terminal, CheckCircle2, AlertCircle, Info, Star, Smartphone } from "lucide-react";
+import { Copy, Terminal, CheckCircle2, AlertCircle, Info, Star, Smartphone, RefreshCw, BarChart2 } from "lucide-react";
 
 const SPORTS = [
   { value: "basketball", label: "Basketball (NBA)", gameId: "fba" },
@@ -27,6 +27,22 @@ export default function Sync() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const syncMutation = useSyncEspn();
+  const enrichMutation = useEnrichLeague();
+  const { data: leagues } = useListLeagues({});
+
+  const handleEnrich = (leagueId: number, leagueName: string) => {
+    enrichMutation.mutate(
+      { id: leagueId },
+      {
+        onSuccess: () => {
+          toast({ title: "Enrichment started", description: `Fetching real stats for ${leagueName} in the background. Takes ~1 min.` });
+        },
+        onError: () => {
+          toast({ title: "Enrichment failed", description: "Could not start stat enrichment.", variant: "destructive" });
+        },
+      }
+    );
+  };
 
   // The bookmarklet runs ON ESPN's website in the user's browser.
   // It fetches the league data directly from ESPN (browser-side, no CORS issues)
@@ -181,6 +197,41 @@ export default function Sync() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Refresh Stats */}
+      {leagues && leagues.length > 0 && (
+        <Card className="border-border">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <BarChart2 className="w-5 h-5 text-primary" />
+              <CardTitle className="uppercase tracking-wide">Refresh Real Stats</CardTitle>
+            </div>
+            <CardDescription>
+              Pull fresh per-game stats, injury context, and news from ESPN's public API for each league. Runs in the background — takes about 1 minute per league.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {leagues.map(league => (
+              <div key={league.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/20">
+                <div>
+                  <p className="font-semibold text-sm">{league.name}</p>
+                  <p className="text-xs text-muted-foreground uppercase">{league.sport} · {league.season}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEnrich(league.id, league.name)}
+                  disabled={enrichMutation.isPending}
+                  className="uppercase tracking-wide text-xs"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1.5 ${enrichMutation.isPending ? "animate-spin" : ""}`} />
+                  Refresh Stats
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Manual form — fallback */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

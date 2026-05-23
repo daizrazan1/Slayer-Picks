@@ -85,6 +85,20 @@ export const ListLeaguesResponse = zod.array(ListLeaguesResponseItem)
 
 
 /**
+ * Fetches real per-game stats, injury context, and recent news from the public ESPN API for every player in the league. Runs asynchronously — returns immediately.
+ * @summary Enrich all players in a league with ESPN public stats
+ */
+export const EnrichLeagueParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const EnrichLeagueResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Get a league by ID
  */
 export const GetLeagueParams = zod.object({
@@ -177,7 +191,14 @@ export const ListTeamPlayersResponseItem = zod.object({
   "projectedPoints": zod.number().nullish(),
   "avgPoints": zod.number().nullish(),
   "totalPoints": zod.number().nullish(),
-  "injuryStatus": zod.string().nullish()
+  "injuryStatus": zod.string().nullish(),
+  "espnPublicStats": zod.union([zod.object({
+  "gamesPlayed": zod.number(),
+  "statLine": zod.record(zod.string(), zod.number()),
+  "injuryDescription": zod.string().nullish(),
+  "recentHeadline": zod.string().nullish(),
+  "fetchedAt": zod.coerce.date()
+}),zod.null()]).optional()
 })
 export const ListTeamPlayersResponse = zod.array(ListTeamPlayersResponseItem)
 
@@ -200,7 +221,14 @@ export const ListPlayersResponseItem = zod.object({
   "projectedPoints": zod.number().nullish(),
   "avgPoints": zod.number().nullish(),
   "totalPoints": zod.number().nullish(),
-  "injuryStatus": zod.string().nullish()
+  "injuryStatus": zod.string().nullish(),
+  "espnPublicStats": zod.union([zod.object({
+  "gamesPlayed": zod.number(),
+  "statLine": zod.record(zod.string(), zod.number()),
+  "injuryDescription": zod.string().nullish(),
+  "recentHeadline": zod.string().nullish(),
+  "fetchedAt": zod.coerce.date()
+}),zod.null()]).optional()
 })
 export const ListPlayersResponse = zod.array(ListPlayersResponseItem)
 
@@ -311,7 +339,14 @@ export const GetDashboardSummaryResponse = zod.object({
   "projectedPoints": zod.number().nullish(),
   "avgPoints": zod.number().nullish(),
   "totalPoints": zod.number().nullish(),
-  "injuryStatus": zod.string().nullish()
+  "injuryStatus": zod.string().nullish(),
+  "espnPublicStats": zod.union([zod.object({
+  "gamesPlayed": zod.number(),
+  "statLine": zod.record(zod.string(), zod.number()),
+  "injuryDescription": zod.string().nullish(),
+  "recentHeadline": zod.string().nullish(),
+  "fetchedAt": zod.coerce.date()
+}),zod.null()]).optional()
 })).optional()
 })
 

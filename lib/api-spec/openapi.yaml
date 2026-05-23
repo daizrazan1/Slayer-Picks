@@ -117,6 +117,32 @@ paths:
                 items:
                   $ref: "#/components/schemas/League"
 
+  /leagues/{id}/enrich:
+    post:
+      operationId: enrichLeague
+      tags: [leagues]
+      summary: Enrich all players in a league with ESPN public stats
+      description: Fetches real per-game stats, injury context, and recent news from the public ESPN API for every player in the league. Runs asynchronously — returns immediately.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Enrichment started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: League not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /leagues/{id}:
     get:
       operationId: getLeague
@@ -521,6 +547,24 @@ components:
         waiversPosition:
           type: ["integer", "null"]
 
+    EspnPublicStats:
+      type: object
+      required: [gamesPlayed, statLine, fetchedAt]
+      properties:
+        gamesPlayed:
+          type: integer
+        statLine:
+          type: object
+          additionalProperties:
+            type: number
+        injuryDescription:
+          type: ["string", "null"]
+        recentHeadline:
+          type: ["string", "null"]
+        fetchedAt:
+          type: string
+          format: date-time
+
     Player:
       type: object
       required: [id, teamId, espnPlayerId, fullName, position, proTeam]
@@ -545,6 +589,10 @@ components:
           type: ["number", "null"]
         injuryStatus:
           type: ["string", "null"]
+        espnPublicStats:
+          oneOf:
+            - $ref: "#/components/schemas/EspnPublicStats"
+            - type: "null"
 
     TradeFindInput:
       type: object

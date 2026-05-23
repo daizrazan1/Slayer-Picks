@@ -3,6 +3,7 @@ import {
   useListLeagues, useListTeams, useListTeamPlayers,
   useEvaluateTrade, useFindTrades,
 } from "@workspace/api-client-react";
+import type { EspnPublicStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -137,6 +138,39 @@ function calcPpg(
 ): string {
   if (totalPoints == null) return "-";
   return (totalPoints / estimatedGames).toFixed(1);
+}
+
+function formatRealStats(stats: EspnPublicStats, sport: string): string {
+  const sl = stats.statLine ?? {};
+  if (sport === "basketball") {
+    const pts = sl["PTS"] ?? sl["3"] ?? 0;
+    const reb = sl["REB"] ?? sl["6"] ?? 0;
+    const ast = sl["AST"] ?? sl["1"] ?? 0;
+    return `${pts.toFixed(1)}pts ${reb.toFixed(1)}reb ${ast.toFixed(1)}ast · ${stats.gamesPlayed}gp`;
+  }
+  if (sport === "football") {
+    const passYds = sl["1"] ?? 0;
+    const rushYds = sl["24"] ?? 0;
+    const recYds = sl["42"] ?? 0;
+    if (passYds > 0) return `${passYds.toFixed(0)}pyds · ${stats.gamesPlayed}gp`;
+    if (rushYds > 0 || recYds > 0) return `${rushYds.toFixed(0)}ryds ${recYds.toFixed(0)}rcvyds · ${stats.gamesPlayed}gp`;
+    return `${stats.gamesPlayed}gp`;
+  }
+  if (sport === "baseball") {
+    const avg = sl["BA"] ?? sl["2"] ?? 0;
+    const hr = sl["HR"] ?? sl["11"] ?? 0;
+    const era = sl["ERA"] ?? sl["1"] ?? null;
+    if (era != null && era > 0 && hr === 0) return `${era.toFixed(2)} ERA · ${stats.gamesPlayed}gp`;
+    return `.${(avg * 1000).toFixed(0).padStart(3, "0")} AVG ${hr.toFixed(0)} HR · ${stats.gamesPlayed}gp`;
+  }
+  if (sport === "hockey") {
+    const goals = sl["G"] ?? sl["1"] ?? 0;
+    const assists = sl["A"] ?? sl["2"] ?? 0;
+    const sv = sl["SV"] ?? sl["7"] ?? 0;
+    if (sv > 0) return `${sv.toFixed(0)} SV · ${stats.gamesPlayed}gp`;
+    return `${goals.toFixed(0)}G ${assists.toFixed(0)}A · ${stats.gamesPlayed}gp`;
+  }
+  return `${stats.gamesPlayed}gp`;
 }
 
 function deriveEstGames(rosters: Array<Array<{ totalPoints?: number | null }>>): number {
@@ -307,8 +341,12 @@ export default function TradeLab() {
                                 <div className="flex-1 min-w-0 leading-none">
                                   <p className="text-sm font-medium truncate">{player.fullName}</p>
                                   <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
+                                  {player.espnPublicStats && player.espnPublicStats.gamesPlayed > 0 ? (
+                                    <p className="text-[10px] text-primary/70 font-mono mt-0.5 truncate">{formatRealStats(player.espnPublicStats, sport)}</p>
+                                  ) : (
+                                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{calcPpg(player.totalPoints, manualEstGames)} ppg est</p>
+                                  )}
                                 </div>
-                                <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, manualEstGames)} <span className="text-muted-foreground font-normal">ppg</span></div>
                               </label>
                             ))}
                           </>
@@ -346,8 +384,12 @@ export default function TradeLab() {
                                 <div className="flex-1 min-w-0 leading-none">
                                   <p className="text-sm font-medium truncate">{player.fullName}</p>
                                   <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
+                                  {player.espnPublicStats && player.espnPublicStats.gamesPlayed > 0 ? (
+                                    <p className="text-[10px] text-accent/70 font-mono mt-0.5 truncate">{formatRealStats(player.espnPublicStats, sport)}</p>
+                                  ) : (
+                                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{calcPpg(player.totalPoints, manualEstGames)} ppg est</p>
+                                  )}
                                 </div>
-                                <div className="text-xs font-mono text-accent font-bold shrink-0">{calcPpg(player.totalPoints, manualEstGames)} <span className="text-muted-foreground font-normal">ppg</span></div>
                               </label>
                             ))}
                           </>
@@ -555,8 +597,12 @@ export default function TradeLab() {
                           <div className="flex-1 min-w-0 leading-none">
                             <p className="text-sm font-medium truncate">{player.fullName}</p>
                             <p className="text-xs text-muted-foreground uppercase mt-0.5">{player.position} • {player.proTeam}</p>
+                            {player.espnPublicStats && player.espnPublicStats.gamesPlayed > 0 ? (
+                              <p className="text-[10px] text-primary/70 font-mono mt-0.5 truncate">{formatRealStats(player.espnPublicStats, sport)}</p>
+                            ) : (
+                              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{calcPpg(player.totalPoints, finderEstGames)} ppg est</p>
+                            )}
                           </div>
-                          <div className="text-xs font-mono text-primary font-bold shrink-0">{calcPpg(player.totalPoints, finderEstGames)} <span className="text-muted-foreground font-normal">ppg</span></div>
                         </label>
                       ))
                     ) : myTeamId ? (
