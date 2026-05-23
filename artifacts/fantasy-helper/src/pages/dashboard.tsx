@@ -175,7 +175,7 @@ export default function Dashboard() {
             onClick={handleSyncNow}
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing…" : "Sync Now"}
+            {syncing ? "Syncing…" : "Quick Sync"}
           </Button>
         )}
       </div>
