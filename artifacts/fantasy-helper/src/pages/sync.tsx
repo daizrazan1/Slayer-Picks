@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSyncEspn, useListLeagues, useEnrichLeague } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Terminal, CheckCircle2, AlertCircle, Info, Star, Smartphone, RefreshCw, BarChart2 } from "lucide-react";
+import { Copy, Terminal, CheckCircle2, AlertCircle, Info, Star, Smartphone, RefreshCw, BarChart2, Monitor, ArrowUp, GripHorizontal } from "lucide-react";
 
 const SPORTS = [
   { value: "basketball", label: "Basketball (NBA)", gameId: "fba" },
@@ -17,12 +17,22 @@ const SPORTS = [
   { value: "hockey", label: "Hockey (NHL)", gameId: "fhl" },
 ];
 
+function detectMobile(): boolean {
+  return typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
 export default function Sync() {
   const [s2, setS2] = useState("");
   const [swid, setSwid] = useState("");
   const [sport, setSport] = useState("basketball");
   const [leagueId, setLeagueId] = useState("");
   const [copied, setCopied] = useState(false);
+  const [bookmarkView, setBookmarkView] = useState<"desktop" | "mobile">("desktop");
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    setBookmarkView(detectMobile() ? "mobile" : "desktop");
+  }, []);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -44,10 +54,6 @@ export default function Sync() {
     );
   };
 
-  // The bookmarklet runs ON ESPN's website in the user's browser.
-  // It fetches the league data directly from ESPN (browser-side, no CORS issues)
-  // then POSTs the raw data to our server at /api/sync-espn-push.
-  // The app URL is baked in at render time so it works from any ESPN page.
   const appOrigin = window.location.origin;
   const bookmarkletCode =
     `javascript:(function(){` +
@@ -67,6 +73,7 @@ export default function Sync() {
     `fetch('${appOrigin}/api/sync-espn-push',{` +
     `method:'POST',` +
     `headers:{'Content-Type':'application/json'},` +
+    `credentials:'include',` +
     `body:JSON.stringify({espnData:data,sport:sport,leagueId:parseInt(lid)})` +
     `}).then(function(r){return r.json();})` +
     `.then(function(d){alert(d.message||'Sync complete!');})` +
@@ -84,7 +91,7 @@ export default function Sync() {
     navigator.clipboard.writeText(bookmarkletCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-    toast({ title: "Bookmarklet copied!", description: "Now paste it as a new bookmark URL in your browser." });
+    toast({ title: "Bookmarklet copied!", description: "Now paste it as the URL of a new bookmark." });
   };
 
   const handleManualSync = (e: React.FormEvent) => {
@@ -97,7 +104,6 @@ export default function Sync() {
       toast({ title: "Missing League ID", description: "Enter your ESPN League ID from the league URL.", variant: "destructive" });
       return;
     }
-
     syncMutation.mutate(
       { data: { s2, swid, sport, leagueId: Number(leagueId) } },
       {
@@ -107,11 +113,7 @@ export default function Sync() {
           setS2(""); setSwid("");
         },
         onError: (error) => {
-          toast({
-            title: "Sync Failed",
-            description: (error as Error).message ?? "An unknown error occurred.",
-            variant: "destructive",
-          });
+          toast({ title: "Sync Failed", description: (error as Error).message ?? "An unknown error occurred.", variant: "destructive" });
         },
       }
     );
@@ -129,72 +131,185 @@ export default function Sync() {
       {/* Bookmarklet — primary method */}
       <Card className="border-primary/40 bg-primary/5">
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <Star className="w-5 h-5 text-primary fill-primary" />
+          <div className="flex items-center gap-3 flex-wrap">
+            <Star className="w-5 h-5 text-primary fill-primary flex-shrink-0" />
             <CardTitle className="uppercase tracking-wide">Bookmarklet Sync</CardTitle>
             <Badge className="bg-primary text-primary-foreground text-xs">Recommended</Badge>
+            <div className="ml-auto flex items-center gap-1 bg-muted rounded-full p-1">
+              <button
+                onClick={() => setBookmarkView("desktop")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase transition-all ${bookmarkView === "desktop" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Monitor className="w-3 h-3" /> Desktop
+              </button>
+              <button
+                onClick={() => setBookmarkView("mobile")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase transition-all ${bookmarkView === "mobile" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Smartphone className="w-3 h-3" /> iOS / Mobile
+              </button>
+            </div>
           </div>
           <CardDescription>
-            Runs entirely in your browser — works on desktop and iOS Safari. No cookie pasting required.
+            Runs entirely in your browser — no cookie pasting required. One click to sync any ESPN league.
           </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            {[
-              { n: "1", title: "Open your ESPN league", body: "Log into ESPN Fantasy and navigate to your league page. The URL must contain ?leagueId=XXXXX." },
-              { n: "2", title: "Save the bookmarklet", body: "Copy the code below and save it as a bookmark — use the code as the URL, not a web address." },
-              { n: "3", title: "Click it on ESPN", body: "While on your ESPN league page, click the bookmark. It fetches your data and syncs it here automatically." },
-            ].map(({ n, title, body }) => (
-              <div key={n} className="flex gap-3">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">{n}</div>
-                <div>
-                  <p className="font-semibold mb-1">{title}</p>
-                  <p className="text-muted-foreground leading-relaxed">{body}</p>
+          {bookmarkView === "desktop" ? (
+            /* ── DESKTOP: drag-to-bookmarks-bar ─────────────────────────────── */
+            <>
+              {/* Steps */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                {[
+                  { n: "1", title: "Drag to bookmarks bar", body: "Drag the button below up to your browser's bookmarks bar. That's it — no copy-pasting needed." },
+                  { n: "2", title: "Go to your ESPN league", body: "Log into ESPN Fantasy and open your league page. The URL must include ?leagueId=XXXXX." },
+                  { n: "3", title: "Click the bookmark", body: "Click the ESPN Sync bookmark while on your league page. Your data will sync here instantly." },
+                ].map(({ n, title, body }) => (
+                  <div key={n} className="flex gap-3">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">{n}</div>
+                    <div>
+                      <p className="font-semibold mb-1">{title}</p>
+                      <p className="text-muted-foreground leading-relaxed">{body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Draggable button zone */}
+              <div className="flex flex-col items-center gap-3 py-4">
+                {/* Animated arrow pointing up */}
+                <div className="flex flex-col items-center gap-1 text-primary/60 animate-bounce select-none">
+                  <ArrowUp className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-widest">Drag up to bookmarks bar</span>
+                </div>
+
+                {/* The draggable link — this IS the bookmark */}
+                <a
+                  href={bookmarkletCode}
+                  onClick={(e) => e.preventDefault()}
+                  onDragStart={() => setDragging(true)}
+                  onDragEnd={() => setDragging(false)}
+                  draggable
+                  data-testid="link-bookmarklet-drag"
+                  title="Drag this to your bookmarks bar"
+                  className={`
+                    inline-flex items-center gap-2.5 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-widest
+                    border-2 border-primary text-primary bg-primary/10
+                    cursor-grab active:cursor-grabbing select-none
+                    transition-all duration-150
+                    ${dragging
+                      ? "scale-105 shadow-lg shadow-primary/30 border-primary bg-primary/20"
+                      : "hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20 hover:scale-[1.02]"
+                    }
+                  `}
+                  style={{ WebkitUserDrag: "element" } as React.CSSProperties}
+                >
+                  <GripHorizontal className="w-4 h-4 opacity-60" />
+                  ⚡ ESPN Sync
+                  <GripHorizontal className="w-4 h-4 opacity-60" />
+                </a>
+
+                <p className="text-xs text-muted-foreground text-center max-w-xs">
+                  Drag this button to your bookmarks bar. Don't see the bar? Press <kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+Shift+B</kbd> (Windows) or <kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">⌘+Shift+B</kbd> (Mac) to show it.
+                </p>
+              </div>
+
+              {/* Fallback copy for power users */}
+              <details className="group">
+                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground flex items-center gap-1.5 list-none select-none">
+                  <span className="group-open:hidden">▶</span>
+                  <span className="hidden group-open:inline">▼</span>
+                  Can't drag? Manually add the bookmark code instead
+                </summary>
+                <div className="mt-3 space-y-2">
+                  <div className="relative bg-muted rounded-md p-4">
+                    <code className="text-xs break-all text-muted-foreground font-mono block pr-10 select-all" data-testid="text-bookmarklet">
+                      {bookmarkletCode}
+                    </code>
+                    <Button size="icon" variant="ghost" className="absolute top-2 right-2" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet-icon">
+                      {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <Button className="w-full" variant="outline" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet">
+                    {copied ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Copied!</> : <><Copy className="w-4 h-4 mr-2" /> Copy Bookmarklet Code</>}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    In Chrome: Bookmarks → Bookmark manager → New Bookmark → paste as the URL. In Safari: Bookmarks → Add Bookmark → edit and replace the URL with this code.
+                  </p>
+                </div>
+              </details>
+            </>
+          ) : (
+            /* ── MOBILE / iOS: copy-paste flow ───────────────────────────────── */
+            <>
+              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex gap-2 text-sm text-yellow-200">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-yellow-400" />
+                <span>Mobile browsers can't add bookmarks via drag. Follow these steps to set it up — only takes 1 minute and you'll never need to do it again.</span>
+              </div>
+
+              {/* Step-by-step mobile instructions */}
+              <div className="space-y-3">
+                {[
+                  {
+                    n: "1",
+                    title: "Copy the bookmarklet code",
+                    body: null,
+                    action: (
+                      <Button className="w-full mt-2" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet">
+                        {copied
+                          ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Copied to clipboard!</>
+                          : <><Copy className="w-4 h-4 mr-2" /> Copy Bookmarklet Code</>
+                        }
+                      </Button>
+                    ),
+                  },
+                  {
+                    n: "2",
+                    title: "Open Safari and bookmark any page",
+                    body: "In Safari, tap the Share button (□↑) at the bottom, then tap 'Add Bookmark'. Save it anywhere — you'll edit it in the next step.",
+                  },
+                  {
+                    n: "3",
+                    title: "Edit the bookmark URL",
+                    body: "Open your Bookmarks (the open-book icon), find the bookmark you just saved, tap Edit, then clear the URL field and paste the code you copied.",
+                  },
+                  {
+                    n: "4",
+                    title: "Go to your ESPN Fantasy league",
+                    body: "Navigate to your ESPN Fantasy league page in Safari. The URL should contain ?leagueId=XXXXX.",
+                  },
+                  {
+                    n: "5",
+                    title: "Tap your bookmark",
+                    body: "Open Bookmarks, tap the 'ESPN Sync' bookmark. It will fetch your league data and sync it here — a confirmation will pop up when done.",
+                  },
+                ].map(({ n, title, body, action }) => (
+                  <div key={n} className="flex gap-3 p-3 rounded-lg border border-border bg-secondary/10">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs mt-0.5">{n}</div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm mb-0.5">{title}</p>
+                      {body && <p className="text-xs text-muted-foreground leading-relaxed">{body}</p>}
+                      {action}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Raw code block always visible for mobile */}
+              <div className="space-y-2">
+                <Label className="uppercase text-xs font-bold text-muted-foreground">Bookmarklet Code</Label>
+                <div className="relative bg-muted rounded-md p-4">
+                  <code className="text-xs break-all text-muted-foreground font-mono block pr-10 select-all" data-testid="text-bookmarklet">
+                    {bookmarkletCode}
+                  </code>
+                  <Button size="icon" variant="ghost" className="absolute top-2 right-2" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet-icon">
+                    {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                  </Button>
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between mb-1">
-              <Label className="uppercase text-xs font-bold text-muted-foreground flex items-center gap-1">
-                <Smartphone className="w-3 h-3" /> Bookmarklet Code
-              </Label>
-              <span className="text-xs text-muted-foreground">Pre-configured for this app's URL</span>
-            </div>
-            <div className="relative bg-muted rounded-md p-4 group">
-              <code className="text-xs break-all text-muted-foreground font-mono block pr-10 select-all" data-testid="text-bookmarklet">
-                {bookmarkletCode}
-              </code>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="absolute top-2 right-2"
-                onClick={copyBookmarklet}
-                data-testid="button-copy-bookmarklet-icon"
-              >
-                {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-            <Button
-              className="w-full"
-              onClick={copyBookmarklet}
-              data-testid="button-copy-bookmarklet"
-            >
-              {copied ? (
-                <><CheckCircle2 className="w-4 h-4 mr-2" /> Copied to clipboard</>
-              ) : (
-                <><Copy className="w-4 h-4 mr-2" /> Copy Bookmarklet</>
-              )}
-            </Button>
-          </div>
-
-          <div className="p-3 rounded bg-muted border border-border text-xs text-muted-foreground flex gap-2">
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>
-              <strong>How to save as a bookmark:</strong> In Chrome/Safari, open Bookmarks → Add Bookmark, then edit the URL field and paste this code. On iOS Safari, bookmark any page, then edit the bookmark and replace the URL with this code.
-            </span>
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -280,7 +395,7 @@ export default function Sync() {
                 />
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Info className="w-3 h-3" />
-                  Each sport has its own league ID — find it in the URL when you're on that league's page: fantasy.espn.com/baseball/league?leagueId=<strong>XXXXX</strong>
+                  Find it in the URL: fantasy.espn.com/baseball/league?leagueId=<strong>XXXXX</strong>
                 </p>
               </div>
 
