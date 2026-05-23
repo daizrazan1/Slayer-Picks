@@ -81,12 +81,18 @@ export default function Dashboard() {
         }
       },
       onError: () => {
-        navigate("/sync");
+        toast({
+          title: "Quick Sync unavailable",
+          description: "Re-run the bookmarklet on ESPN to refresh your data.",
+        });
       },
     },
   });
 
-  const hasCredentials = syncStatus?.leagues.some(
+  // hasStoredCreds: server has espnS2+swid on file → server-pull works
+  const hasStoredCreds = syncStatus?.hasCredentials ?? false;
+  // hasSynced: user has at least synced once (via bookmarklet or manual)
+  const hasSynced = syncStatus?.leagues.some(
     l => l.sport === sport && l.autoSyncEnabled
   ) ?? false;
   const staleLeagues = syncStatus?.leagues.filter(
@@ -94,10 +100,13 @@ export default function Dashboard() {
   ) ?? [];
 
   const handleSyncNow = () => {
-    if (hasCredentials) {
+    if (hasStoredCreds) {
       refreshSync();
     } else {
-      navigate("/sync");
+      toast({
+        title: "Re-run the bookmarklet",
+        description: "Open ESPN on your browser, tap the SlayerPicks bookmarklet, and your data will update automatically.",
+      });
     }
   };
 
@@ -160,9 +169,14 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
             <Clock className="w-4 h-4" />
             Last synced: {summary.lastSyncAt ? new Date(summary.lastSyncAt).toLocaleString() : "Never"}
-            {hasCredentials && (
+            {hasStoredCreds && (
               <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
                 Auto-sync on
+              </span>
+            )}
+            {hasSynced && !hasStoredCreds && (
+              <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
+                Bookmarklet sync
               </span>
             )}
           </p>
