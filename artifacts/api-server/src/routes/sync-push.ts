@@ -68,7 +68,7 @@ async function processEspnData(
   if (existing) {
     await db
       .update(leaguesTable)
-      .set({ name: leagueName, season: seasonId, teamCount: teams.length, syncedAt: new Date() })
+      .set({ name: leagueName, season: seasonId, teamCount: teams.length, syncedAt: new Date(), autoSyncEnabled: true })
       .where(eq(leaguesTable.id, existing.id));
     dbLeagueId = existing.id;
   } else {
@@ -82,6 +82,7 @@ async function processEspnData(
         sport,
         teamCount: teams.length,
         syncedAt: new Date(),
+        autoSyncEnabled: true,
       })
       .returning();
     dbLeagueId = inserted!.id;
