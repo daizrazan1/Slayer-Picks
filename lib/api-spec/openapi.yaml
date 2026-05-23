@@ -237,6 +237,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /teams/{teamId}/enrich:
+    post:
+      operationId: enrichTeamPlayers
+      tags: [players]
+      summary: Fetch fresh ESPN stats for all players on a team
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Enrichment started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "404":
+          description: Team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /teams/{teamId}/players:
     get:
       operationId: listTeamPlayers

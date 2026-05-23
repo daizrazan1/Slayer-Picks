@@ -237,6 +237,11 @@ export type ListLeaguesParams = {
 sport?: string;
 };
 
+export type EnrichTeamPlayers200 = {
+  success: boolean;
+  message: string;
+};
+
 export type ListPlayersParams = {
 leagueId?: number;
 position?: string;

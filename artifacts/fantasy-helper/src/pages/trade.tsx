@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListLeagues, useListTeams, useListTeamPlayers,
-  useEvaluateTrade, useFindTrades,
+  useEvaluateTrade, useFindTrades, useEnrichTeamPlayers,
+  getListTeamPlayersQueryKey,
 } from "@workspace/api-client-react";
 import type { EspnPublicStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -198,8 +200,10 @@ export default function TradeLab() {
   const [targetPositions, setTargetPositions] = useState<string[]>([]);
   const [packageSize, setPackageSize] = useState<number>(2);
 
+  const qc = useQueryClient();
   const evaluateMutation = useEvaluateTrade();
   const findMutation = useFindTrades();
+  const enrichMutation = useEnrichTeamPlayers();
 
   useEffect(() => {
     setLeagueId(null); setTeamAId(null); setTeamBId(null);
@@ -243,6 +247,27 @@ export default function TradeLab() {
       setOfferedPlayerIds([]);
     }
   }, [finderTeams]);
+
+  // Auto-enrich: when a roster loads with missing ESPN stats, fetch them then refetch players
+  const enrichedTeams = useRef(new Set<number>());
+  const autoEnrich = (teamId: number, roster: Array<{ espnPublicStats?: unknown }> | undefined) => {
+    if (!teamId || !roster || enrichedTeams.current.has(teamId)) return;
+    const missing = roster.some(p => !p.espnPublicStats);
+    if (!missing) return;
+    enrichedTeams.current.add(teamId);
+    enrichMutation.mutate({ teamId }, {
+      onSuccess: () => {
+        // Refetch after ~20s to give enrichment time to complete
+        setTimeout(() => {
+          qc.invalidateQueries({ queryKey: getListTeamPlayersQueryKey(teamId) });
+        }, 20000);
+      },
+    });
+  };
+
+  useEffect(() => { autoEnrich(teamAId!, rosterA); }, [teamAId, rosterA]);
+  useEffect(() => { autoEnrich(teamBId!, rosterB); }, [teamBId, rosterB]);
+  useEffect(() => { autoEnrich(myTeamId!, myRoster); }, [myTeamId, myRoster]);
 
   const handleLeagueChange = (val: string) => {
     setLeagueId(parseInt(val, 10));

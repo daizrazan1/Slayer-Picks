@@ -8,6 +8,7 @@
 
 export * from './dashboardSummary';
 export * from './deleteResult';
+export * from './enrichTeamPlayers200';
 export * from './errorResponse';
 export * from './espnPublicStats';
 export * from './espnPublicStatsStatLine';

@@ -22,6 +22,7 @@ import type {
 import type {
   DashboardSummary,
   DeleteResult,
+  EnrichTeamPlayers200,
   ErrorResponse,
   EspnSyncInput,
   GetDashboardSummaryParams,
@@ -806,6 +807,76 @@ export function useGetTeam<TData = Awaited<ReturnType<typeof getTeam>>, TError =
 
 
 
+
+export const getEnrichTeamPlayersUrl = (teamId: number,) => {
+
+
+
+
+  return `/api/teams/${teamId}/enrich`
+}
+
+/**
+ * @summary Fetch fresh ESPN stats for all players on a team
+ */
+export const enrichTeamPlayers = async (teamId: number, options?: RequestInit): Promise<EnrichTeamPlayers200> => {
+
+  return customFetch<EnrichTeamPlayers200>(getEnrichTeamPlayersUrl(teamId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getEnrichTeamPlayersMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enrichTeamPlayers>>, TError,{teamId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof enrichTeamPlayers>>, TError,{teamId: number}, TContext> => {
+
+const mutationKey = ['enrichTeamPlayers'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof enrichTeamPlayers>>, {teamId: number}> = (props) => {
+          const {teamId} = props ?? {};
+
+          return  enrichTeamPlayers(teamId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EnrichTeamPlayersMutationResult = NonNullable<Awaited<ReturnType<typeof enrichTeamPlayers>>>
+
+    export type EnrichTeamPlayersMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Fetch fresh ESPN stats for all players on a team
+ */
+export const useEnrichTeamPlayers = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enrichTeamPlayers>>, TError,{teamId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof enrichTeamPlayers>>,
+        TError,
+        {teamId: number},
+        TContext
+      > => {
+      return useMutation(getEnrichTeamPlayersMutationOptions(options));
+    }
 
 export const getListTeamPlayersUrl = (teamId: number,) => {
 

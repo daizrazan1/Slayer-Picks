@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
 import { eq, inArray, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
-import { enrichLeaguePlayers } from "../lib/espn-public";
+import { enrichLeaguePlayers, fetchEspnPublicStats } from "../lib/espn-public";
 import {
   GetLeagueParams,
   GetLeagueResponse,
@@ -113,6 +113,48 @@ router.get("/teams/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   res.json(GetTeamResponse.parse(team));
+});
+
+router.post("/teams/:teamId/enrich", requireAuth, async (req, res): Promise<void> => {
+  const teamId = parseInt(String(req.params["teamId"] ?? ""), 10);
+  if (isNaN(teamId)) {
+    res.status(400).json({ error: "Invalid teamId" });
+    return;
+  }
+  const [team] = await db
+    .select({ id: teamsTable.id, leagueId: teamsTable.leagueId })
+    .from(teamsTable)
+    .where(eq(teamsTable.id, teamId));
+  if (!team) {
+    res.status(404).json({ error: "Team not found" });
+    return;
+  }
+  const [leagueRow] = await db
+    .select({ sport: leaguesTable.sport })
+    .from(leaguesTable)
+    .where(eq(leaguesTable.id, team.leagueId));
+  const sport = leagueRow?.sport ?? "basketball";
+
+  res.json({ success: true, message: "Enrichment started for team" });
+
+  // Run in background: only enrich this team's players
+  (async () => {
+    const players = await db
+      .select({ id: playersTable.id, espnPlayerId: playersTable.espnPlayerId, position: playersTable.position })
+      .from(playersTable)
+      .where(eq(playersTable.teamId, teamId));
+    for (const player of players) {
+      try {
+        const stats = await fetchEspnPublicStats(player.espnPlayerId, sport, player.position);
+        if (stats) {
+          await db.update(playersTable).set({ espnPublicStats: stats }).where(eq(playersTable.id, player.id));
+        }
+      } catch { /* ignore individual failures */ }
+      await new Promise(r => setTimeout(r, 300));
+    }
+  })().catch((err: unknown) => {
+    req.log.error({ err, teamId }, "Team enrichment failed");
+  });
 });
 
 router.get("/teams/:teamId/players", requireAuth, async (req, res): Promise<void> => {

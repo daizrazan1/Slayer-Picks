@@ -177,6 +177,19 @@ export const GetTeamResponse = zod.object({
 
 
 /**
+ * @summary Fetch fresh ESPN stats for all players on a team
+ */
+export const EnrichTeamPlayersParams = zod.object({
+  "teamId": zod.coerce.number()
+})
+
+export const EnrichTeamPlayersResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary List players on a team
  */
 export const ListTeamPlayersParams = zod.object({
