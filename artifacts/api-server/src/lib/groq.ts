@@ -130,33 +130,34 @@ export async function evaluateTrade(
   const rosterContext = (players: typeof allTeamAPlayers, tradingIds: number[]) =>
     players.filter(p => !tradingIds.includes(p.id)).map(p => `${p.fullName}(${p.position})`).join(", ") || "none";
 
-  const prompt = `You are an expert fantasy ${sport} analyst. Evaluate ONLY the players listed below.
+  const prompt = `You are an expert fantasy ${sport} analyst helping "${teamA.name}" decide whether to make a trade.
 
-TRADE (estimated ${sport} games this season: ~${estimatedGames}):
-"${teamA.name}" (${teamA.wins}W-${teamA.losses}L) sends — ${combinedPpg(givingUpA)} combined fantasy ppg:
-${givingUpA.map(formatPlayer).join("\n") || "  (none selected)"}
+TRADE DETAILS (estimated games this season: ~${estimatedGames}):
 
-"${teamB.name}" (${teamB.wins}W-${teamB.losses}L) sends — ${combinedPpg(givingUpB)} combined fantasy ppg:
-${givingUpB.map(formatPlayer).join("\n") || "  (none selected)"}
+"${teamA.name}" (${teamA.wins}W-${teamA.losses}L) is GIVING AWAY these players — combined ${combinedPpg(givingUpA)} fantasy ppg:
+${givingUpA.map(formatPlayer).join("\n") || "  (none)"}
 
-Roster context after trade (positional fit reference only):
+"${teamA.name}" will RECEIVE these players from "${teamB.name}" (${teamB.wins}W-${teamB.losses}L) — combined ${combinedPpg(givingUpB)} fantasy ppg:
+${givingUpB.map(formatPlayer).join("\n") || "  (none)"}
+
+Roster context after trade (positional fit, reference only):
 ${teamA.name} keeps: ${rosterContext(allTeamAPlayers, teamAPlayerIds)}
 ${teamB.name} keeps: ${rosterContext(allTeamBPlayers, teamBPlayerIds)}
 
-SCORING GUIDE — winScoreA and winScoreB each run 0-100 independently:
-• 48-52 / 48-52 → essentially equal trade, both sides break even
-• 55-65 vs 35-45 → clear but modest advantage to the higher-scored team
-• 65-75 vs 25-35 → significantly lopsided, winner gains real roster edge
-• 75+ vs <25 → highly one-sided, rare, only for extreme mismatches
-Use real stat lines when provided. If a player is injured/out, reduce their value accordingly.
-Only give scores outside 30-70 if the ppg difference is substantial (>15 ppg total gap).
+SCORING RULES:
+- winScoreA = how much "${teamA.name}" BENEFITS from this trade (high = great deal for them)
+- winScoreB = how much "${teamB.name}" BENEFITS from this trade (high = great deal for them)
+- Scores are independent, each 0-100. A fair trade → both ~50. Lopsided → winner ~65-75, loser ~25-35.
+- Only go above 75 or below 25 for truly extreme mismatches (>20 ppg total gap AND elite vs weak tier).
+- If "${teamA.name}" receives more total ppg than they give up → winScoreA should be HIGHER than winScoreB.
+- If a player is injured/out, reduce their value significantly.
 
-Return ONLY this JSON (no markdown, no extra text):
+Return ONLY this JSON (no markdown):
 {
   "winScoreA": <0-100>,
   "winScoreB": <0-100>,
-  "analysis": "<3-4 sentences: mention each player by name with their stats/ppg, compare total value on each side, state who wins the trade and why>",
-  "recommendation": "<Accept|Decline|Neutral> (from ${teamA.name}'s perspective)"
+  "analysis": "<3-4 sentences: name each player with their ppg, compare total value given up vs received by ${teamA.name}, clearly state whether this trade helps or hurts ${teamA.name} and why>",
+  "recommendation": "<Accept|Decline|Neutral> — Accept if ${teamA.name} benefits more, Decline if they lose value"
 }`;
 
   const promptHash = hashPrompt(prompt);
