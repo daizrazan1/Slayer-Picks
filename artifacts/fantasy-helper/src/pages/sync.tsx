@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSyncEspn, useListLeagues, useEnrichLeague } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,6 +29,7 @@ export default function Sync() {
   const [copied, setCopied] = useState(false);
   const [bookmarkView, setBookmarkView] = useState<"desktop" | "mobile">("desktop");
   const [dragging, setDragging] = useState(false);
+  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     setBookmarkView(detectMobile() ? "mobile" : "desktop");
@@ -86,6 +87,13 @@ export default function Sync() {
     `.catch(function(){tryNext(i+1);});}` +
     `tryNext(0);` +
     `})();`;
+
+  // React blocks javascript: URLs in JSX props — set href directly on the DOM node to bypass it.
+  useEffect(() => {
+    if (bookmarkletRef.current) {
+      bookmarkletRef.current.setAttribute("href", bookmarkletCode);
+    }
+  }, [bookmarkletCode]);
 
   const copyBookmarklet = () => {
     navigator.clipboard.writeText(bookmarkletCode);
@@ -184,9 +192,9 @@ export default function Sync() {
                   <span className="text-xs font-bold uppercase tracking-widest">Drag up to bookmarks bar</span>
                 </div>
 
-                {/* The draggable link — this IS the bookmark */}
+                {/* The draggable link — href is set via ref/useEffect to bypass React's javascript: URL block */}
                 <a
-                  href={bookmarkletCode}
+                  ref={bookmarkletRef}
                   onClick={(e) => e.preventDefault()}
                   onDragStart={() => setDragging(true)}
                   onDragEnd={() => setDragging(false)}
