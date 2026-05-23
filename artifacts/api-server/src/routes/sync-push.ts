@@ -7,12 +7,13 @@ import { enrichLeaguePlayers } from "../lib/espn-public";
 const router: IRouter = Router();
 
 router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
-  const body = req.body as { sport?: unknown; leagueId?: unknown; espnData?: unknown; swid?: unknown };
+  const body = req.body as { sport?: unknown; leagueId?: unknown; espnData?: unknown; swid?: unknown; s2?: unknown };
 
   const sport = typeof body.sport === "string" ? body.sport : "basketball";
   const leagueId = typeof body.leagueId === "number" ? body.leagueId : parseInt(String(body.leagueId ?? ""), 10);
   const espnData = body.espnData as Record<string, unknown> | undefined;
   const swid = typeof body.swid === "string" ? body.swid.trim() : "";
+  const s2 = typeof body.s2 === "string" ? body.s2.trim() : "";
   const userId = req.session.userId!;
 
   if (!leagueId || isNaN(leagueId)) {
@@ -27,7 +28,7 @@ router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
   req.log.info({ leagueId, sport }, "Processing browser-pushed ESPN data");
 
   try {
-    const result = await processEspnData(espnData, leagueId, sport, userId, swid);
+    const result = await processEspnData(espnData, leagueId, sport, userId, swid, s2);
 
     res.json({
       success: true,
@@ -50,7 +51,8 @@ async function processEspnData(
   leagueId: number,
   sport: string,
   userId: number,
-  swid: string = ""
+  swid: string = "",
+  s2: string = ""
 ): Promise<{ leaguesSynced: number; playersSynced: number; dbLeagueId: number }> {
   const teams = (raw["teams"] as EspnTeamData[] | undefined) ?? [];
   const settings = raw["settings"] as { name?: string } | undefined;
@@ -68,7 +70,12 @@ async function processEspnData(
   if (existing) {
     await db
       .update(leaguesTable)
-      .set({ name: leagueName, season: seasonId, teamCount: teams.length, syncedAt: new Date(), autoSyncEnabled: true })
+      .set({
+        name: leagueName, season: seasonId, teamCount: teams.length, syncedAt: new Date(),
+        autoSyncEnabled: true,
+        ...(s2 ? { espnS2: s2 } : {}),
+        ...(swid ? { swid } : {}),
+      })
       .where(eq(leaguesTable.id, existing.id));
     dbLeagueId = existing.id;
   } else {
@@ -83,6 +90,8 @@ async function processEspnData(
         teamCount: teams.length,
         syncedAt: new Date(),
         autoSyncEnabled: true,
+        ...(s2 ? { espnS2: s2 } : {}),
+        ...(swid ? { swid } : {}),
       })
       .returning();
     dbLeagueId = inserted!.id;

@@ -71,12 +71,13 @@ export default function Sync() {
     `'https://fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings'` +
     `];` +
     `var swid=decodeURIComponent((document.cookie.match(/SWID=([^;]+)/)||[])[1]||'');` +
+    `var s2=decodeURIComponent((document.cookie.match(/espn_s2=([^;]+)/)||[])[1]||'');` +
     `function sendData(data){` +
     `fetch('${appOrigin}/api/sync-espn-push',{` +
     `method:'POST',` +
     `headers:{'Content-Type':'application/json'},` +
     `credentials:'include',` +
-    `body:JSON.stringify({espnData:data,sport:sport,leagueId:parseInt(lid),swid:swid})` +
+    `body:JSON.stringify({espnData:data,sport:sport,leagueId:parseInt(lid),swid:swid,s2:s2})` +
     `}).then(function(r){return r.json();})` +
     `.then(function(d){alert(d.message||'Sync complete!');})` +
     `.catch(function(e){alert('ESPN data fetched but could not reach Fantasy Helper. Error: '+e.message);});}` +
