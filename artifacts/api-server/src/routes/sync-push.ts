@@ -7,11 +7,12 @@ import { enrichLeaguePlayers } from "../lib/espn-public";
 const router: IRouter = Router();
 
 router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
-  const body = req.body as { sport?: unknown; leagueId?: unknown; espnData?: unknown };
+  const body = req.body as { sport?: unknown; leagueId?: unknown; espnData?: unknown; swid?: unknown };
 
   const sport = typeof body.sport === "string" ? body.sport : "basketball";
   const leagueId = typeof body.leagueId === "number" ? body.leagueId : parseInt(String(body.leagueId ?? ""), 10);
   const espnData = body.espnData as Record<string, unknown> | undefined;
+  const swid = typeof body.swid === "string" ? body.swid.trim() : "";
   const userId = req.session.userId!;
 
   if (!leagueId || isNaN(leagueId)) {
@@ -26,7 +27,7 @@ router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
   req.log.info({ leagueId, sport }, "Processing browser-pushed ESPN data");
 
   try {
-    const result = await processEspnData(espnData, leagueId, sport, userId);
+    const result = await processEspnData(espnData, leagueId, sport, userId, swid);
 
     res.json({
       success: true,
@@ -48,7 +49,8 @@ async function processEspnData(
   raw: Record<string, unknown>,
   leagueId: number,
   sport: string,
-  userId: number
+  userId: number,
+  swid: string = ""
 ): Promise<{ leaguesSynced: number; playersSynced: number; dbLeagueId: number }> {
   const teams = (raw["teams"] as EspnTeamData[] | undefined) ?? [];
   const settings = raw["settings"] as { name?: string } | undefined;
@@ -99,6 +101,7 @@ async function processEspnData(
       );
 
     let dbTeamId: number;
+    const isOwnerTeam = !!(swid && espnTeam.primaryOwner && espnTeam.primaryOwner === swid);
     const teamData = {
       leagueId: dbLeagueId,
       espnTeamId: String(espnTeam.id ?? ""),
@@ -110,6 +113,7 @@ async function processEspnData(
       pointsFor: espnTeam.record?.overall?.pointsFor ?? null,
       pointsAgainst: espnTeam.record?.overall?.pointsAgainst ?? null,
       waiversPosition: espnTeam.wavierRank ?? null,
+      isOwnerTeam,
     };
 
     if (existingTeam) {
@@ -156,6 +160,7 @@ interface EspnTeamData {
   name?: string;
   abbrev?: string;
   wavierRank?: number;
+  primaryOwner?: string;
   record?: {
     overall?: {
       wins?: number;

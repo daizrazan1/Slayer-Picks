@@ -104,6 +104,7 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
           );
 
         let dbTeamId: number;
+        const isOwnerTeam = !!(swid && espnTeam.primaryOwner && espnTeam.primaryOwner === swid);
         const teamData = {
           leagueId: dbLeagueId,
           espnTeamId: String(espnTeam.id),
@@ -115,6 +116,7 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
           pointsFor: espnTeam.record?.overall?.pointsFor ?? null,
           pointsAgainst: espnTeam.record?.overall?.pointsAgainst ?? null,
           waiversPosition: espnTeam.wavierRank ?? null,
+          isOwnerTeam,
         };
 
         if (existingTeam) {
@@ -329,6 +331,7 @@ interface EspnTeamData {
   name?: string;
   abbrev?: string;
   wavierRank?: number;
+  primaryOwner?: string;
   record?: {
     overall?: {
       wins?: number;

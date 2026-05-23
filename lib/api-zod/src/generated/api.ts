@@ -147,7 +147,8 @@ export const ListTeamsResponseItem = zod.object({
   "ties": zod.number().optional(),
   "pointsFor": zod.number().nullish(),
   "pointsAgainst": zod.number().nullish(),
-  "waiversPosition": zod.number().nullish()
+  "waiversPosition": zod.number().nullish(),
+  "isOwnerTeam": zod.boolean().optional()
 })
 export const ListTeamsResponse = zod.array(ListTeamsResponseItem)
 
@@ -170,7 +171,8 @@ export const GetTeamResponse = zod.object({
   "ties": zod.number().optional(),
   "pointsFor": zod.number().nullish(),
   "pointsAgainst": zod.number().nullish(),
-  "waiversPosition": zod.number().nullish()
+  "waiversPosition": zod.number().nullish(),
+  "isOwnerTeam": zod.boolean().optional()
 })
 
 

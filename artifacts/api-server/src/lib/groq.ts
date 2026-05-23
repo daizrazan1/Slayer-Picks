@@ -130,33 +130,33 @@ export async function evaluateTrade(
   const rosterContext = (players: typeof allTeamAPlayers, tradingIds: number[]) =>
     players.filter(p => !tradingIds.includes(p.id)).map(p => `${p.fullName}(${p.position})`).join(", ") || "none";
 
-  const prompt = `You are an expert fantasy basketball analyst. Evaluate ONLY the traded players listed below. Do NOT mention any player not explicitly listed under "GIVES UP".
+  const prompt = `You are an expert fantasy ${sport} analyst. Evaluate ONLY the players listed below.
 
-TRADE (estimated games played this season: ~${estimatedGames}):
-Team A "${teamA.name}" (${teamA.wins}W-${teamA.losses}L) GIVES UP — combined ${combinedPpg(givingUpA)} ppg:
-${givingUpA.map(formatPlayer).join("\n") || "  (none)"}
+TRADE (estimated ${sport} games this season: ~${estimatedGames}):
+"${teamA.name}" (${teamA.wins}W-${teamA.losses}L) sends — ${combinedPpg(givingUpA)} combined fantasy ppg:
+${givingUpA.map(formatPlayer).join("\n") || "  (none selected)"}
 
-Team B "${teamB.name}" (${teamB.wins}W-${teamB.losses}L) GIVES UP — combined ${combinedPpg(givingUpB)} ppg:
-${givingUpB.map(formatPlayer).join("\n") || "  (none)"}
+"${teamB.name}" (${teamB.wins}W-${teamB.losses}L) sends — ${combinedPpg(givingUpB)} combined fantasy ppg:
+${givingUpB.map(formatPlayer).join("\n") || "  (none selected)"}
 
-Roster context after trade (for positional needs only — do NOT mention these players in analysis):
-Team A keeps: ${rosterContext(allTeamAPlayers, teamAPlayerIds)}
-Team B keeps: ${rosterContext(allTeamBPlayers, teamBPlayerIds)}
+Roster context after trade (positional fit reference only):
+${teamA.name} keeps: ${rosterContext(allTeamAPlayers, teamAPlayerIds)}
+${teamB.name} keeps: ${rosterContext(allTeamBPlayers, teamBPlayerIds)}
 
-EVALUATION RULES:
-1. Use ppg as the primary value metric. A player averaging 65+ ppg is ELITE and carries outsized win-now value that combined lesser players often cannot match.
-2. Combined ppg alone does not equal value — one 74 ppg player is worth more than two 37 ppg players because elite players are scarce and ceiling-defining.
-3. Consider positional fit: does each team actually need what they're receiving?
-4. Account for trade timing: during the season, immediate production matters most. In the off-season, hold elite players unless receiving multiple strong players (55+ ppg each).
-5. Injury flags are significant — adjust value down for injured/questionable players.
-6. winScoreA/winScoreB must reflect actual lopsidedness. If Team A gives up a 74 ppg player for two 50 ppg players, Team A's win score should be LOW (25-35) and Team B's HIGH (70-80) — do not default to 50/50.
+SCORING GUIDE — winScoreA and winScoreB each run 0-100 independently:
+• 48-52 / 48-52 → essentially equal trade, both sides break even
+• 55-65 vs 35-45 → clear but modest advantage to the higher-scored team
+• 65-75 vs 25-35 → significantly lopsided, winner gains real roster edge
+• 75+ vs <25 → highly one-sided, rare, only for extreme mismatches
+Use real stat lines when provided. If a player is injured/out, reduce their value accordingly.
+Only give scores outside 30-70 if the ppg difference is substantial (>15 ppg total gap).
 
 Return ONLY this JSON (no markdown, no extra text):
 {
   "winScoreA": <0-100>,
   "winScoreB": <0-100>,
-  "analysis": "<3-4 sentences: name each traded player with their ppg, compare the sides, explain who wins and why, note off-season vs in-season implications>",
-  "recommendation": "<Accept|Decline|Neutral> (from Team A's perspective)"
+  "analysis": "<3-4 sentences: mention each player by name with their stats/ppg, compare total value on each side, state who wins the trade and why>",
+  "recommendation": "<Accept|Decline|Neutral> (from ${teamA.name}'s perspective)"
 }`;
 
   const promptHash = hashPrompt(prompt);
@@ -327,8 +327,7 @@ export async function findTrades(
   }
 
   const posFilter = targetPositions && targetPositions.length > 0
-    ? `Want back: ${targetPositions.join(",")}` : "";
-  const sizeFilter = packageSize ? `Max receive: ${packageSize}` : "";
+    ? `Target positions: ${targetPositions.join(",")}` : "";
 
   const offeredAvgPts = offeredPlayers.map(p => {
     const meta = playerRankMap.get(p.id);
@@ -344,23 +343,28 @@ export async function findTrades(
     return `[${t.id}]${t.name}(${t.wins}-${t.losses}):\n${starters.map(formatPlayer).join("\n")}`;
   }).join("\n\n");
 
-  const prompt = `Fantasy trade finder. Tiers:E>S>A>W. ppg=pts/game avg(~${estimatedGames} games). Value ratio at ${fairness}% fairness: ${fairnessInstr}.
-${posFilter} ${sizeFilter}
+  const sizeRule = packageSize
+    ? `- playersToReceive MUST contain EXACTLY ${packageSize} player name(s) — no more, no fewer.`
+    : "";
 
-OFFERING(${offeredAvgPts.toFixed(1)}ppg combined):
+  const prompt = `Fantasy ${sport} trade finder. Tiers:E>S>A>W. ppg=fantasy pts/game avg(~${estimatedGames} games). Fairness target: ${fairness}%(${fairnessInstr}).
+${posFilter}
+
+I AM OFFERING (${offeredAvgPts.toFixed(1)}ppg combined — FIXED, do NOT change):
 ${offeredPlayers.map(formatPlayer).join("\n") || "(none)"}
 
-MY ROSTER:
+MY ROSTER (context only):
 ${myRoster.filter(p => !benchSlots.has(p.position)).map(formatPlayer).join("\n")}
 
-OPPOSING TEAMS(starters only):
+OPPOSING TEAMS (starters only):
 ${oppTeamLines}
 
 RULES:
-- The OFFERING listed above is FIXED. I am sending EXACTLY those players and NO others. Do NOT add, swap, or mention any other players on my side.
-- Your ONLY job is to decide which players I should RECEIVE from each opposing team.
-- For each team, find the best package for me to receive at ${fairness}% fairness(${fairnessInstr}).
-- Use ppg to judge value. Skip teams with no viable package.
+- The OFFERING above is locked. I send exactly those players and nothing else.
+- Your job: for each opposing team, pick the best players I should RECEIVE.
+- Match the fairness target (${fairnessInstr}) using ppg as the value metric.
+${sizeRule}
+- Skip teams where no viable package exists.
 Return ONLY JSON:
 {"packages":[{"targetTeamId":<n>,"targetTeamName":"<s>","record":"<W-L>","playersToReceive":["<name ppg tier>"],"fairnessScore":<0-100>,"reasoning":"<2 sentences citing ppg numbers for both sides>","recommendation":"<Send It|Consider|Skip>"}]}`;
 

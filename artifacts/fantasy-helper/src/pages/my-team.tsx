@@ -64,13 +64,9 @@ function nameMatchesTip(playerName: string, tipPlayerName: string): boolean {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function MyTeam() {
   const { sport } = useSport();
-  const storageKey = `myTeam_${sport}`;
 
   const [leagueId, setLeagueId] = useState<number | null>(null);
-  const [myTeamId, setMyTeamId] = useState<number | null>(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? parseInt(saved, 10) : null;
-  });
+  const [myTeamId, setMyTeamId] = useState<number | null>(null);
 
   const { data: leagues, isLoading: leaguesLoading } = useListLeagues({ sport });
 
@@ -79,15 +75,27 @@ export default function MyTeam() {
     if (leagues && leagues.length === 0) setLeagueId(null);
   }, [leagues]);
 
+  // Reset when sport changes
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    setMyTeamId(saved ? parseInt(saved, 10) : null);
-  }, [sport, storageKey]);
+    setMyTeamId(null);
+  }, [sport]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: teams, isLoading: teamsLoading } = useListTeams(leagueId ?? 0, { query: { enabled: !!leagueId } } as any);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: players, isLoading: playersLoading } = useListTeamPlayers(myTeamId ?? 0, { query: { enabled: !!myTeamId } } as any);
+
+  // Auto-select the user's own team based on isOwnerTeam flag set during sync
+  useEffect(() => {
+    if (!teams) return;
+    const ownerTeam = teams.find(t => t.isOwnerTeam);
+    if (ownerTeam) {
+      setMyTeamId(ownerTeam.id);
+    } else {
+      setMyTeamId(null);
+    }
+    setInsightsEnabled(false);
+  }, [teams]);
 
   const [insightsEnabled, setInsightsEnabled] = useState(false);
   const {
@@ -97,13 +105,6 @@ export default function MyTeam() {
     refetch: refetchInsights,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useGetTeamInsights(myTeamId ?? 0, { query: { enabled: insightsEnabled && !!myTeamId } } as any);
-
-  const handleTeamSelect = (val: string) => {
-    const id = parseInt(val, 10);
-    setMyTeamId(id);
-    localStorage.setItem(storageKey, String(id));
-    setInsightsEnabled(false);
-  };
 
   const myTeam = teams?.find((t) => t.id === myTeamId);
   const selectedLeague = leagues?.find((l) => l.id === leagueId);
@@ -172,21 +173,13 @@ export default function MyTeam() {
         </div>
         <div className="flex gap-3">
           {leagues.length > 1 && (
-            <Select value={leagueId?.toString()} onValueChange={(v) => setLeagueId(parseInt(v, 10))}>
+            <Select value={leagueId?.toString()} onValueChange={(v) => { setLeagueId(parseInt(v, 10)); setMyTeamId(null); }}>
               <SelectTrigger className="w-44 bg-card"><SelectValue placeholder="League" /></SelectTrigger>
               <SelectContent>
                 {leagues.map((l) => <SelectItem key={l.id} value={l.id.toString()}>{l.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
-          <Select value={myTeamId?.toString() ?? ""} onValueChange={handleTeamSelect} disabled={teamsLoading || !teams}>
-            <SelectTrigger className="w-56 bg-card">
-              <SelectValue placeholder={teamsLoading ? "Loading…" : "Which team is yours?"} />
-            </SelectTrigger>
-            <SelectContent>
-              {teams?.map((t) => <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -215,12 +208,12 @@ export default function MyTeam() {
         </Card>
       )}
 
-      {/* ── No team selected ── */}
+      {/* ── No owner team identified ── */}
       {!myTeamId && !teamsLoading && teams && teams.length > 0 && (
         <div className="text-center text-muted-foreground p-16 border border-dashed border-border rounded-lg">
           <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">Select your team above to see your roster.</p>
-          <p className="text-sm mt-1">Your choice is saved — you won't need to pick again.</p>
+          <p className="font-medium">Your team wasn't detected automatically.</p>
+          <p className="text-sm mt-1">Re-sync your ESPN league using the bookmarklet — your team will be identified automatically.</p>
         </div>
       )}
 

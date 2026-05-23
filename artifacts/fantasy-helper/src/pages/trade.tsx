@@ -143,30 +143,30 @@ function calcPpg(
 function formatRealStats(stats: EspnPublicStats, sport: string): string {
   const sl = stats.statLine ?? {};
   if (sport === "basketball") {
-    const pts = sl["PTS"] ?? sl["3"] ?? 0;
-    const reb = sl["REB"] ?? sl["6"] ?? 0;
-    const ast = sl["AST"] ?? sl["1"] ?? 0;
+    const pts = sl["avgPoints"] ?? 0;
+    const reb = sl["avgRebounds"] ?? 0;
+    const ast = sl["avgAssists"] ?? 0;
     return `${pts.toFixed(1)}pts ${reb.toFixed(1)}reb ${ast.toFixed(1)}ast · ${stats.gamesPlayed}gp`;
   }
   if (sport === "football") {
-    const passYds = sl["1"] ?? 0;
-    const rushYds = sl["24"] ?? 0;
-    const recYds = sl["42"] ?? 0;
-    if (passYds > 0) return `${passYds.toFixed(0)}pyds · ${stats.gamesPlayed}gp`;
-    if (rushYds > 0 || recYds > 0) return `${rushYds.toFixed(0)}ryds ${recYds.toFixed(0)}rcvyds · ${stats.gamesPlayed}gp`;
+    const passYds = sl["passingYards"] ?? 0;
+    const rushYds = sl["rushingYards"] ?? 0;
+    const recYds = sl["receivingYards"] ?? 0;
+    if (passYds > 0) return `${passYds.toFixed(0)} pass yds · ${stats.gamesPlayed}gp`;
+    if (rushYds > 0 || recYds > 0) return `${rushYds.toFixed(0)} rush ${recYds.toFixed(0)} rec yds · ${stats.gamesPlayed}gp`;
     return `${stats.gamesPlayed}gp`;
   }
   if (sport === "baseball") {
-    const avg = sl["BA"] ?? sl["2"] ?? 0;
-    const hr = sl["HR"] ?? sl["11"] ?? 0;
-    const era = sl["ERA"] ?? sl["1"] ?? null;
+    const avg = sl["battingAverage"] ?? 0;
+    const hr = sl["homeRuns"] ?? 0;
+    const era = sl["ERA"] ?? null;
     if (era != null && era > 0 && hr === 0) return `${era.toFixed(2)} ERA · ${stats.gamesPlayed}gp`;
     return `.${(avg * 1000).toFixed(0).padStart(3, "0")} AVG ${hr.toFixed(0)} HR · ${stats.gamesPlayed}gp`;
   }
   if (sport === "hockey") {
-    const goals = sl["G"] ?? sl["1"] ?? 0;
-    const assists = sl["A"] ?? sl["2"] ?? 0;
-    const sv = sl["SV"] ?? sl["7"] ?? 0;
+    const goals = sl["goals"] ?? 0;
+    const assists = sl["assists"] ?? 0;
+    const sv = sl["saves"] ?? 0;
     if (sv > 0) return `${sv.toFixed(0)} SV · ${stats.gamesPlayed}gp`;
     return `${goals.toFixed(0)}G ${assists.toFixed(0)}A · ${stats.gamesPlayed}gp`;
   }
@@ -223,6 +223,26 @@ export default function TradeLab() {
   // Shared estimatedGames per mode — derived from combined rosters so both sides use same denominator
   const manualEstGames = deriveEstGames([rosterA ?? [], rosterB ?? []]);
   const finderEstGames = deriveEstGames([myRoster ?? []]);
+
+  // Auto-lock Team A to the user's own team whenever teams for the selected league load
+  useEffect(() => {
+    if (!manualTeams) return;
+    const owner = manualTeams.find(t => t.isOwnerTeam);
+    if (owner && teamAId !== owner.id) {
+      setTeamAId(owner.id);
+      setTeamAPlayers([]);
+    }
+  }, [manualTeams]);
+
+  // Auto-lock finder myTeamId to the user's own team
+  useEffect(() => {
+    if (!finderTeams) return;
+    const owner = finderTeams.find(t => t.isOwnerTeam);
+    if (owner && myTeamId !== owner.id) {
+      setMyTeamId(owner.id);
+      setOfferedPlayerIds([]);
+    }
+  }, [finderTeams]);
 
   const handleLeagueChange = (val: string) => {
     setLeagueId(parseInt(val, 10));
@@ -316,16 +336,16 @@ export default function TradeLab() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
-                  {/* Team A */}
+                  {/* Team A — locked to user's own team */}
                   <div className="p-4 flex flex-col h-[500px]">
                     <div className="mb-4">
-                      <label className="text-xs font-bold text-primary uppercase mb-1 block">Team A (Receiving)</label>
-                      <Select disabled={!leagueId} value={teamAId?.toString()} onValueChange={v => { setTeamAId(parseInt(v, 10)); setTeamAPlayers([]); }}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select Team A" /></SelectTrigger>
-                        <SelectContent>
-                          {manualTeams?.filter(t => t.id !== teamBId).map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-primary uppercase">My Team</label>
+                        <span className="text-[10px] bg-primary/10 text-primary border border-primary/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider">You</span>
+                      </div>
+                      <div className="w-full h-9 flex items-center px-3 rounded-md border border-border bg-secondary/30 text-sm text-muted-foreground truncate">
+                        {manualTeams?.find(t => t.id === teamAId)?.name ?? (leagueId ? "Sync your league to auto-detect your team" : "Select a league first")}
+                      </div>
                     </div>
                     <ScrollArea className="flex-1 border rounded-md border-border bg-background/50">
                       <div className="p-2 space-y-1">
@@ -333,9 +353,9 @@ export default function TradeLab() {
                           <div className="p-4 space-y-2"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
                         ) : rosterA && rosterA.length > 0 ? (
                           <>
-                            <div className="text-xs text-muted-foreground px-2 py-1 font-bold uppercase tracking-wider bg-secondary/50 rounded mb-2">Players to give up</div>
+                            <div className="text-xs text-primary/70 px-2 py-1 font-bold uppercase tracking-wider bg-primary/5 rounded mb-2">✓ Check players you're giving away</div>
                             {rosterA.map(player => (
-                              <label key={player.id} className="flex items-center gap-2.5 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors">
+                              <label key={player.id} className={`flex items-center gap-2.5 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors ${teamAPlayers.includes(player.id) ? "bg-primary/10 border border-primary/20 rounded-md" : ""}`}>
                                 <Checkbox checked={teamAPlayers.includes(player.id)} onCheckedChange={() => setTeamAPlayers(prev => prev.includes(player.id) ? prev.filter(p => p !== player.id) : [...prev, player.id])} className="shrink-0" />
                                 <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="sm" />
                                 <div className="flex-1 min-w-0 leading-none">
@@ -353,18 +373,18 @@ export default function TradeLab() {
                         ) : teamAId ? (
                           <p className="text-sm text-center p-4 text-muted-foreground">No players found.</p>
                         ) : (
-                          <p className="text-sm text-center p-4 text-muted-foreground">Select a team to view roster.</p>
+                          <p className="text-sm text-center p-4 text-muted-foreground">Select a league to load your roster.</p>
                         )}
                       </div>
                     </ScrollArea>
                   </div>
 
-                  {/* Team B */}
+                  {/* Team B — opponent, selectable */}
                   <div className="p-4 flex flex-col h-[500px]">
                     <div className="mb-4">
-                      <label className="text-xs font-bold text-accent uppercase mb-1 block">Team B (Giving)</label>
+                      <label className="text-xs font-bold text-accent uppercase mb-1 block">Trading With</label>
                       <Select disabled={!leagueId} value={teamBId?.toString()} onValueChange={v => { setTeamBId(parseInt(v, 10)); setTeamBPlayers([]); }}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select Team B" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select opponent" /></SelectTrigger>
                         <SelectContent>
                           {manualTeams?.filter(t => t.id !== teamAId).map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>)}
                         </SelectContent>
@@ -376,9 +396,9 @@ export default function TradeLab() {
                           <div className="p-4 space-y-2"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
                         ) : rosterB && rosterB.length > 0 ? (
                           <>
-                            <div className="text-xs text-muted-foreground px-2 py-1 font-bold uppercase tracking-wider bg-secondary/50 rounded mb-2">Players to give up</div>
+                            <div className="text-xs text-accent/70 px-2 py-1 font-bold uppercase tracking-wider bg-accent/5 rounded mb-2">✓ Check players you want to receive</div>
                             {rosterB.map(player => (
-                              <label key={player.id} className="flex items-center gap-2.5 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors">
+                              <label key={player.id} className={`flex items-center gap-2.5 p-2 hover:bg-secondary/30 rounded-md cursor-pointer transition-colors ${teamBPlayers.includes(player.id) ? "bg-accent/10 border border-accent/20 rounded-md" : ""}`}>
                                 <Checkbox checked={teamBPlayers.includes(player.id)} onCheckedChange={() => setTeamBPlayers(prev => prev.includes(player.id) ? prev.filter(p => p !== player.id) : [...prev, player.id])} className="shrink-0" />
                                 <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="sm" />
                                 <div className="flex-1 min-w-0 leading-none">
@@ -396,7 +416,7 @@ export default function TradeLab() {
                         ) : teamBId ? (
                           <p className="text-sm text-center p-4 text-muted-foreground">No players found.</p>
                         ) : (
-                          <p className="text-sm text-center p-4 text-muted-foreground">Select a team to view roster.</p>
+                          <p className="text-sm text-center p-4 text-muted-foreground">Select an opponent to view their roster.</p>
                         )}
                       </div>
                     </ScrollArea>
@@ -503,15 +523,12 @@ export default function TradeLab() {
                   </Select>
                 </div>
 
-                {/* My team */}
+                {/* My team — auto-locked */}
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase mb-1.5 block">Your Team</label>
-                  <Select disabled={!finderLeagueId} value={myTeamId?.toString()} onValueChange={v => { setMyTeamId(parseInt(v, 10)); setOfferedPlayerIds([]); findMutation.reset(); }}>
-                    <SelectTrigger className="w-full bg-background"><SelectValue placeholder="Select your team" /></SelectTrigger>
-                    <SelectContent>
-                      {finderTeams?.map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-full h-9 flex items-center px-3 rounded-md border border-border bg-secondary/30 text-sm text-muted-foreground truncate">
+                    {finderTeams?.find(t => t.id === myTeamId)?.name ?? (finderLeagueId ? "Sync your league to auto-detect your team" : "Select a league first")}
+                  </div>
                 </div>
 
                 {/* Fairness slider */}
@@ -559,7 +576,7 @@ export default function TradeLab() {
                 {/* Package size */}
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase mb-2 block">
-                    Max Players to Receive
+                    Players I Want in Return
                   </label>
                   <div className="flex gap-2">
                     {[1, 2, 3].map(n => (

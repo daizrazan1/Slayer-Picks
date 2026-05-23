@@ -21,4 +21,5 @@ export interface Team {
   pointsAgainst?: number | null;
   /** @nullable */
   waiversPosition?: number | null;
+  isOwnerTeam?: boolean;
 }

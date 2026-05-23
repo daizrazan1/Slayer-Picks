@@ -64,6 +64,7 @@ export interface Team {
   pointsAgainst?: number | null;
   /** @nullable */
   waiversPosition?: number | null;
+  isOwnerTeam?: boolean;
 }
 
 export type EspnPublicStatsStatLine = {[key: string]: number};

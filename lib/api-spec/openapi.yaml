@@ -546,6 +546,8 @@ components:
           type: ["number", "null"]
         waiversPosition:
           type: ["integer", "null"]
+        isOwnerTeam:
+          type: boolean
 
     EspnPublicStats:
       type: object
