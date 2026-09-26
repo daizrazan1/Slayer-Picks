@@ -10,6 +10,7 @@ export const leaguesTable = pgTable("leagues", {
   season: integer("season").notNull(),
   sport: text("sport").notNull().default("football"),
   teamCount: integer("team_count"),
+  currentMatchupPeriod: integer("current_matchup_period"),
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   espnS2: text("espn_s2"),
   swid: text("swid"),

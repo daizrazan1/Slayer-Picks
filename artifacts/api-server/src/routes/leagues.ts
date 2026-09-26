@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
+import { leaguesTable, teamsTable, playersTable, waiverPlayersTable, matchupsTable } from "@workspace/db";
 import { eq, inArray, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
 import { enrichLeaguePlayers, fetchEspnPublicStats } from "../lib/espn-public";
@@ -80,9 +80,28 @@ router.delete("/leagues/:id", requireAuth, async (req, res): Promise<void> => {
   if (teamIds.length > 0) {
     await db.delete(playersTable).where(inArray(playersTable.teamId, teamIds));
   }
+  await db.delete(waiverPlayersTable).where(eq(waiverPlayersTable.leagueId, league.id));
+  await db.delete(matchupsTable).where(eq(matchupsTable.leagueId, league.id));
   await db.delete(teamsTable).where(eq(teamsTable.leagueId, league.id));
   await db.delete(leaguesTable).where(eq(leaguesTable.id, league.id));
   res.json({ success: true, message: "League deleted" });
+});
+
+router.get("/leagues/:id/waiver-wire", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ error: "Invalid league ID" });
+    return;
+  }
+  const [league] = await db.select({ id: leaguesTable.id }).from(leaguesTable)
+    .where(and(eq(leaguesTable.id, id), eq(leaguesTable.userId, req.session.userId!)));
+  if (!league) {
+    res.status(404).json({ error: "League not found" });
+    return;
+  }
+  const players = await db.select().from(waiverPlayersTable)
+    .where(eq(waiverPlayersTable.leagueId, id));
+  res.json({ players, syncedAt: players[0]?.syncedAt?.toISOString() ?? null });
 });
 
 router.get("/leagues/:leagueId/teams", requireAuth, async (req, res): Promise<void> => {

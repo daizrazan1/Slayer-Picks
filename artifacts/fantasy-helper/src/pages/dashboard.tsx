@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,6 +7,7 @@ import {
   useDeleteTrade,
   useClearAllTrades,
   useGetSyncStatus,
+  useListLeagues,
   useTriggerSyncRefresh,
   getListRecentTradesQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -44,10 +45,13 @@ export default function Dashboard() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [syncGuide, setSyncGuide] = useState(false);
+  const isIos = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const { data: summary, isLoading } = useGetDashboardSummary({ sport });
   const { data: recentTrades, isLoading: tradesLoading } = useListRecentTrades();
   const { data: syncStatus } = useGetSyncStatus();
+  const { data: leagues } = useListLeagues({ sport });
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: getListRecentTradesQueryKey() });
@@ -83,7 +87,7 @@ export default function Dashboard() {
       onError: () => {
         toast({
           title: "Quick Sync unavailable",
-          description: "Re-run the bookmarklet on ESPN to refresh your data.",
+          description: "Open Data Sync for the browser import steps.",
         });
       },
     },
@@ -91,10 +95,7 @@ export default function Dashboard() {
 
   // hasStoredCreds: server has espnS2+swid on file → server-pull works
   const hasStoredCreds = syncStatus?.hasCredentials ?? false;
-  // hasSynced: user has at least synced once (via bookmarklet or manual)
-  const hasSynced = syncStatus?.leagues.some(
-    l => l.sport === sport && l.autoSyncEnabled
-  ) ?? false;
+  const hasSynced = (leagues?.length ?? 0) > 0;
   const staleLeagues = syncStatus?.leagues.filter(
     l => l.sport === sport && l.lastAutoSyncError
   ) ?? [];
@@ -103,10 +104,16 @@ export default function Dashboard() {
     if (hasStoredCreds) {
       refreshSync();
     } else {
-      toast({
-        title: "Re-run the bookmarklet",
-        description: "Open ESPN on your browser, tap the SlayerPicks bookmarklet, and your data will update automatically.",
-      });
+      setSyncGuide(true);
+      const league = leagues?.[0];
+      if (!league) {
+        navigate("/sync");
+        return;
+      }
+      const sportPath = league.sport === "basketball" ? "basketball" : league.sport === "baseball" ? "baseball" : league.sport === "hockey" ? "hockey" : "football";
+      const espnUrl = `https://fantasy.espn.com/${sportPath}/league?leagueId=${encodeURIComponent(league.espnLeagueId)}&seasonId=${league.season}`;
+      const tab = window.open(espnUrl, "_blank");
+      if (!tab) window.location.assign(espnUrl);
     }
   };
 
@@ -163,6 +170,13 @@ export default function Dashboard() {
       )}
 
       {/* ── Header ── */}
+      {syncGuide && !hasStoredCreds && (
+        <div role="status" className="rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
+          <strong>Finish Quick Sync on ESPN:</strong> {isIos
+            ? "in the ESPN tab that just opened in Safari, tap Share → ESPN Sync. Set up the Safari action from Data Sync first if you have not already."
+            : "in the ESPN tab that just opened, click your ESPN Sync bookmark. Replace an older bookmark from Data Sync first if needed."} <Link href="/sync" className="underline">Data Sync</Link>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight uppercase">{sportLabel} Command Center</h1>
@@ -176,7 +190,7 @@ export default function Dashboard() {
             )}
             {hasSynced && !hasStoredCreds && (
               <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
-                Bookmarklet sync
+                Browser sync
               </span>
             )}
           </p>

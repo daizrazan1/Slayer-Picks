@@ -6,6 +6,9 @@ import { SyncEspnBody, SyncEspnResponse } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/requireAuth";
 import { enrichLeaguePlayers } from "../lib/espn-public";
+import { encryptEspnCredential } from "../lib/espn-credentials";
+import { footballLineupSlot, footballPlayerPosition } from "../lib/espn-position";
+import { getCurrentEspnWeek, getWeeklyPlayerPoints, saveCurrentMatchups, type EspnWeeklyLeague } from "../lib/espn-weekly";
 
 const router: IRouter = Router();
 
@@ -50,6 +53,8 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
     let playersSynced = 0;
 
     for (const espnLeague of espnLeagues) {
+      const weeklyData = espnLeague as EspnWeeklyLeague;
+      const currentWeek = (espnLeague.sport ?? sport) === "football" ? getCurrentEspnWeek(weeklyData) : null;
       const [existing] = await db
         .select()
         .from(leaguesTable)
@@ -65,8 +70,8 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
             season: espnLeague.seasonId ?? new Date().getFullYear(),
             teamCount: espnLeague.teams?.length ?? null,
             syncedAt: new Date(),
-            espnS2: s2,
-            swid,
+            espnS2: encryptEspnCredential(s2),
+            swid: encryptEspnCredential(swid),
             autoSyncEnabled: true,
             lastAutoSyncError: null,
           })
@@ -83,8 +88,8 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
             sport: espnLeague.sport ?? sport ?? "football",
             teamCount: espnLeague.teams?.length ?? null,
             syncedAt: new Date(),
-            espnS2: s2,
-            swid,
+            espnS2: encryptEspnCredential(s2),
+            swid: encryptEspnCredential(swid),
             autoSyncEnabled: true,
           })
           .returning();
@@ -136,11 +141,17 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
             teamId: dbTeamId,
             espnPlayerId: String(player.id),
             fullName: player.fullName ?? `Player ${player.id}`,
-            position: getPositionName(entry.lineupSlotId ?? 0, detectedSport),
+            position: detectedSport === "football"
+              ? footballPlayerPosition(player.defaultPositionId) ?? getPositionName(entry.lineupSlotId ?? 0, detectedSport)
+              : getPositionName(entry.lineupSlotId ?? 0, detectedSport),
+            lineupSlot: detectedSport === "football"
+              ? footballLineupSlot(entry.lineupSlotId)
+              : entry.lineupSlotId == null ? null : getPositionName(entry.lineupSlotId, detectedSport),
             proTeam: getProTeamAbbrev(player.proTeamId ?? 0, detectedSport),
-            projectedPoints: null,
+            projectedPoints: getWeeklyPlayerPoints(player.stats, currentWeek, 1, espnLeague.seasonId ?? new Date().getFullYear()),
+            weeklyPoints: getWeeklyPlayerPoints(player.stats, currentWeek, 0, espnLeague.seasonId ?? new Date().getFullYear()),
             avgPoints: null,
-            totalPoints: getSeasonTotal(player.stats) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
+            totalPoints: getSeasonTotal(player.stats, espnLeague.seasonId ?? new Date().getFullYear()) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
             injuryStatus: player.injuryStatus ?? null,
           };
 
@@ -162,6 +173,7 @@ router.post("/sync-espn", requireAuth, async (req, res): Promise<void> => {
           }
         }
       }
+      if ((espnLeague.sport ?? sport) === "football") await saveCurrentMatchups(dbLeagueId, weeklyData);
     }
 
     const result = SyncEspnResponse.parse({
@@ -239,7 +251,7 @@ async function fetchEspnLeagues(
   for (const { gameId, sport: sportName } of gameIdsToTry) {
     for (const host of ESPN_HOSTS) {
       for (const year of years) {
-        const url = `${host}/apis/v3/games/${gameId}/seasons/${year}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster&view=mSettings&view=mStandings`;
+        const url = `${host}/apis/v3/games/${gameId}/seasons/${year}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster&view=mSettings&view=mStandings&view=mMatchup&view=mMatchupScore`;
         const label = `${sportName}/${year} (${host.includes("lm-api") ? "new" : "old"})`;
 
         try {
@@ -318,7 +330,7 @@ async function fetchEspnLeagues(
   );
 }
 
-interface EspnLeagueData {
+interface EspnLeagueData extends EspnWeeklyLeague {
   id?: number;
   seasonId?: number;
   sport?: string;
@@ -348,6 +360,7 @@ interface EspnStatEntry {
   appliedTotal?: number;
   scoringPeriodId?: number;
   seasonId?: number;
+  statSourceId?: number;
   statSplitTypeId?: number;
 }
 
@@ -360,6 +373,7 @@ interface EspnRosterEntry {
       id?: number;
       fullName?: string;
       proTeamId?: number;
+      defaultPositionId?: number;
       injuryStatus?: string;
       stats?: EspnStatEntry[];
     };
@@ -367,9 +381,10 @@ interface EspnRosterEntry {
 }
 
 /** Returns the full-season fantasy total (statSplitTypeId=0) from the player's stats array. */
-function getSeasonTotal(stats?: EspnStatEntry[]): number | null {
+function getSeasonTotal(stats: EspnStatEntry[] | undefined, seasonId: number): number | null {
   if (!stats || stats.length === 0) return null;
-  const entry = stats.find(s => s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
+  const entry = stats.find(s => s.seasonId === seasonId && s.statSourceId === 0 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0)
+    ?? stats.find(s => s.seasonId == null && s.statSourceId === 0 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
   return entry?.appliedTotal ?? null;
 }
 

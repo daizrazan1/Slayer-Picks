@@ -9,6 +9,7 @@ import playersRouter from "./players";
 import tradeRouter from "./trade";
 import dashboardRouter from "./dashboard";
 import insightsRouter from "./insights";
+import weeklyRouter from "./weekly";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(playersRouter);
 router.use(tradeRouter);
 router.use(dashboardRouter);
 router.use(insightsRouter);
+router.use(weeklyRouter);
 
 export default router;

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Terminal, CheckCircle2, AlertCircle, Info, Star, Smartphone, RefreshCw, BarChart2, Monitor, ArrowUp, GripHorizontal } from "lucide-react";
+import { createEspnBookmarklet, createEspnSafariShortcut } from "@/lib/espn-bookmarklet";
 
 const SPORTS = [
   { value: "basketball", label: "Basketball (NBA)", gameId: "fba" },
@@ -27,9 +28,12 @@ export default function Sync() {
   const [sport, setSport] = useState("basketball");
   const [leagueId, setLeagueId] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shortcutCopied, setShortcutCopied] = useState(false);
   const [bookmarkView, setBookmarkView] = useState<"desktop" | "mobile">("desktop");
   const [dragging, setDragging] = useState(false);
+  const [browserSyncStatus, setBrowserSyncStatus] = useState<string | null>(null);
   const bookmarkletRef = useRef<HTMLAnchorElement>(null);
+  const incomingHandledRef = useRef(false);
 
   useEffect(() => {
     setBookmarkView(detectMobile() ? "mobile" : "desktop");
@@ -55,40 +59,40 @@ export default function Sync() {
     );
   };
 
-  const appOrigin = window.location.origin;
-  const bookmarkletCode =
-    `javascript:(function(){` +
-    `var sports={fba:'basketball',ffl:'football',flb:'baseball',fhl:'hockey'};` +
-    `var path=location.pathname;` +
-    `var gid=path.includes('basketball')?'fba':path.includes('baseball')?'flb':path.includes('hockey')?'fhl':'ffl';` +
-    `var sport=sports[gid]||'football';` +
-    `var lid=new URLSearchParams(location.search).get('leagueId');` +
-    `if(!lid){alert('Navigate to your ESPN Fantasy league page first, then click the bookmarklet.');return;}` +
-    `var now=new Date();var mo=now.getMonth();var cy=now.getFullYear();` +
-    `var yr=(gid==='fba'||gid==='fhl')?(mo>=9?cy+1:cy):(gid==='ffl')?(mo>=7?cy:cy-1):cy;` +
-    `var urls=[` +
-    `'https://lm-api-reads.fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings',` +
-    `'https://fantasy.espn.com/apis/v3/games/'+gid+'/seasons/'+yr+'/segments/0/leagues/'+lid+'?view=mTeam&view=mRoster&view=mSettings'` +
-    `];` +
-    `var swid=decodeURIComponent((document.cookie.match(/SWID=([^;]+)/)||[])[1]||'');` +
-    `var s2=decodeURIComponent((document.cookie.match(/espn_s2=([^;]+)/)||[])[1]||'');` +
-    `function sendData(data){` +
-    `fetch('${appOrigin}/api/sync-espn-push',{` +
-    `method:'POST',` +
-    `headers:{'Content-Type':'application/json'},` +
-    `credentials:'include',` +
-    `body:JSON.stringify({espnData:data,sport:sport,leagueId:parseInt(lid),swid:swid,s2:s2})` +
-    `}).then(function(r){return r.json();})` +
-    `.then(function(d){alert(d.message||'Sync complete!');})` +
-    `.catch(function(e){alert('ESPN data fetched but could not reach Fantasy Helper. Error: '+e.message);});}` +
-    `function tryNext(i){` +
-    `if(i>=urls.length){alert('Could not reach ESPN API. Make sure you are logged into ESPN, on your league page, and that the URL contains ?leagueId=');return;}` +
-    `fetch(urls[i],{credentials:'include',headers:{Accept:'application/json'}})` +
-    `.then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})` +
-    `.then(function(data){sendData(data);})` +
-    `.catch(function(){tryNext(i+1);});}` +
-    `tryNext(0);` +
-    `})();`;
+  const bookmarkletCode = createEspnBookmarklet(window.location.origin);
+  const shortcutCode = createEspnSafariShortcut(window.location.origin);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("incoming") !== "espn" || !window.opener) return;
+    const opener = window.opener;
+    const onMessage = async (event: MessageEvent) => {
+      if (event.origin !== "https://fantasy.espn.com" || event.source !== opener) return;
+      const payload = event.data;
+      if (payload?.type !== "slayer-picks-espn-data" || incomingHandledRef.current) return;
+      incomingHandledRef.current = true;
+      setBrowserSyncStatus("Importing your ESPN league...");
+      try {
+        const response = await fetch("/api/sync-espn-push", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Import failed");
+        setBrowserSyncStatus(result.waiverError ? `${result.message}. ${result.waiverError}` : result.message);
+        queryClient.invalidateQueries();
+        toast({ title: "ESPN Sync Successful", description: result.waiverError ? `${result.message}. ${result.waiverError}` : result.message });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Import failed";
+        setBrowserSyncStatus(message);
+        toast({ title: "ESPN Sync Failed", description: message, variant: "destructive" });
+      }
+    };
+    window.addEventListener("message", onMessage);
+    opener.postMessage({ type: "slayer-picks-ready" }, "https://fantasy.espn.com");
+    return () => window.removeEventListener("message", onMessage);
+  }, [queryClient, toast]);
 
   // React blocks javascript: URLs in JSX props — set href directly on the DOM node to bypass it.
   useEffect(() => {
@@ -102,6 +106,17 @@ export default function Sync() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
     toast({ title: "Bookmarklet copied!", description: "Now paste it as the URL of a new bookmark." });
+  };
+
+  const copyShortcut = async () => {
+    try {
+      await navigator.clipboard.writeText(shortcutCode);
+      setShortcutCopied(true);
+      setTimeout(() => setShortcutCopied(false), 2500);
+      toast({ title: "Safari action copied", description: "Paste it into Run JavaScript on Webpage in Shortcuts." });
+    } catch {
+      toast({ title: "Copy failed", description: "Select and copy the script below instead.", variant: "destructive" });
+    }
   };
 
   const handleManualSync = (e: React.FormEvent) => {
@@ -136,6 +151,7 @@ export default function Sync() {
         <p className="text-muted-foreground mt-2">
           Connect your ESPN Fantasy account to import leagues, teams, and rosters.
         </p>
+        {browserSyncStatus && <p role="status" className="mt-3 font-semibold">{browserSyncStatus}</p>}
       </div>
 
       {/* Bookmarklet — primary method */}
@@ -143,8 +159,8 @@ export default function Sync() {
         <CardHeader>
           <div className="flex items-center gap-3 flex-wrap">
             <Star className="w-5 h-5 text-primary fill-primary flex-shrink-0" />
-            <CardTitle className="uppercase tracking-wide">Bookmarklet Sync</CardTitle>
-            <Badge className="bg-primary text-primary-foreground text-xs">Recommended</Badge>
+            <CardTitle className="uppercase tracking-wide">ESPN Browser Sync</CardTitle>
+            <Badge className="bg-primary text-primary-foreground text-xs">{bookmarkView === "mobile" ? "iPhone preview" : "Recommended"}</Badge>
             <div className="ml-auto flex items-center gap-1 bg-muted rounded-full p-1">
               <button
                 onClick={() => setBookmarkView("desktop")}
@@ -156,12 +172,12 @@ export default function Sync() {
                 onClick={() => setBookmarkView("mobile")}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase transition-all ${bookmarkView === "mobile" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}
               >
-                <Smartphone className="w-3 h-3" /> iOS / Mobile
+                <Smartphone className="w-3 h-3" /> iPhone / iPad
               </button>
             </div>
           </div>
           <CardDescription>
-            Runs entirely in your browser — no cookie pasting required. One click to sync any ESPN league.
+            Fetches your league, rosters, and available players while you are signed in on ESPN, then opens Slayer Picks to import them. No ESPN cookie pasting or storage required.
           </CardDescription>
         </CardHeader>
 
@@ -172,9 +188,9 @@ export default function Sync() {
               {/* Steps */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 {[
-                  { n: "1", title: "Drag to bookmarks bar", body: "Drag the button below up to your browser's bookmarks bar. That's it — no copy-pasting needed." },
+                  { n: "1", title: "Replace your old bookmark", body: "Open Slayer Picks in the same browser you use for ESPN, sign in, then drag the button below to your bookmarks bar." },
                   { n: "2", title: "Go to your ESPN league", body: "Log into ESPN Fantasy and open your league page. The URL must include ?leagueId=XXXXX." },
-                  { n: "3", title: "Click the bookmark", body: "Click the ESPN Sync bookmark while on your league page. Your data will sync here instantly." },
+                  { n: "3", title: "Click the new bookmark", body: "Click ESPN Sync while on your league page. A Slayer Picks tab will open and show the import result." },
                 ].map(({ n, title, body }) => (
                   <div key={n} className="flex gap-3">
                     <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">{n}</div>
@@ -251,48 +267,54 @@ export default function Sync() {
               </details>
             </>
           ) : (
-            /* ── MOBILE / iOS: copy-paste flow ───────────────────────────────── */
+            /* ── iPhone / iPad: Safari Share Sheet action ───────────────────── */
             <>
-              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex gap-2 text-sm text-yellow-200">
-                <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-yellow-400" />
-                <span>Mobile browsers can't add bookmarks via drag. Follow these steps to set it up — only takes 1 minute and you'll never need to do it again.</span>
+              {(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") && (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex gap-2 text-sm">
+                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-yellow-500" />
+                  <span>This is a local preview. The iPhone action needs Slayer Picks deployed to a public HTTPS address before you set it up on your phone.</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h3 className="font-bold uppercase tracking-wide">Sync from Safari's Share menu</h3>
+                <p className="text-sm text-muted-foreground">
+                  Set this up once on your iPhone or iPad. After that, open your ESPN league in Safari and tap Share → ESPN Sync. Your league imports into Slayer Picks without copying ESPN cookies.
+                </p>
+                <a className="text-xs text-primary underline" href="https://support.apple.com/en-az/guide/shortcuts/apdb71a01d93/ios" target="_blank" rel="noopener noreferrer">
+                  Apple's guide to Safari webpage shortcuts
+                </a>
               </div>
 
-              {/* Step-by-step mobile instructions */}
               <div className="space-y-3">
                 {[
                   {
                     n: "1",
-                    title: "Copy the bookmarklet code",
-                    body: null,
+                    title: "Copy the Safari action script",
+                    body: "Use the button below while viewing Slayer Picks in Safari on the same iPhone or iPad.",
                     action: (
-                      <Button className="w-full mt-2" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet">
-                        {copied
-                          ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Copied to clipboard!</>
-                          : <><Copy className="w-4 h-4 mr-2" /> Copy Bookmarklet Code</>
+                      <Button className="w-full mt-2" onClick={copyShortcut} data-testid="button-copy-safari-action">
+                        {shortcutCopied
+                          ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Copied!</>
+                          : <><Copy className="w-4 h-4 mr-2" /> Copy Safari Action</>
                         }
                       </Button>
                     ),
                   },
                   {
                     n: "2",
-                    title: "Open Safari and bookmark any page",
-                    body: "In Safari, tap the Share button (□↑) at the bottom, then tap 'Add Bookmark'. Save it anywhere — you'll edit it in the next step.",
+                    title: "Create an iPhone Shortcut",
+                    body: "In the Shortcuts app, tap +, add the ‘Run JavaScript on Webpage’ action, and paste the script. Add a ‘Show Result’ action after it so any setup errors are visible.",
                   },
                   {
                     n: "3",
-                    title: "Edit the bookmark URL",
-                    body: "Open your Bookmarks (the open-book icon), find the bookmark you just saved, tap Edit, then clear the URL field and paste the code you copied.",
+                    title: "Show it in Safari's Share menu",
+                    body: "Name the Shortcut ‘ESPN Sync’. In its Details, turn on ‘Show in Share Sheet’ and set its input to Safari webpages. Allow webpage scripts if Shortcuts asks.",
                   },
                   {
                     n: "4",
-                    title: "Go to your ESPN Fantasy league",
-                    body: "Navigate to your ESPN Fantasy league page in Safari. The URL should contain ?leagueId=XXXXX.",
-                  },
-                  {
-                    n: "5",
-                    title: "Tap your bookmark",
-                    body: "Open Bookmarks, tap the 'ESPN Sync' bookmark. It will fetch your league data and sync it here — a confirmation will pop up when done.",
+                    title: "Import your league",
+                    body: "Sign in to Slayer Picks and ESPN in Safari. Open your ESPN league page (URL includes leagueId), then tap Share → ESPN Sync. For later refreshes, start with Quick Sync in Slayer Picks so a sleeping free host wakes before import.",
                   },
                 ].map(({ n, title, body, action }) => (
                   <div key={n} className="flex gap-3 p-3 rounded-lg border border-border bg-secondary/10">
@@ -306,18 +328,28 @@ export default function Sync() {
                 ))}
               </div>
 
-              {/* Raw code block always visible for mobile */}
-              <div className="space-y-2">
-                <Label className="uppercase text-xs font-bold text-muted-foreground">Bookmarklet Code</Label>
-                <div className="relative bg-muted rounded-md p-4">
-                  <code className="text-xs break-all text-muted-foreground font-mono block pr-10 select-all" data-testid="text-bookmarklet">
-                    {bookmarkletCode}
+              <details className="text-sm">
+                <summary className="cursor-pointer font-semibold">Show Safari action script</summary>
+                <div className="relative bg-muted rounded-md p-4 mt-3 max-h-48 overflow-auto">
+                  <code className="text-xs break-all text-muted-foreground font-mono block pr-10 select-all" data-testid="text-safari-action">
+                    {shortcutCode}
                   </code>
-                  <Button size="icon" variant="ghost" className="absolute top-2 right-2" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet-icon">
-                    {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                  <Button size="icon" variant="ghost" className="absolute top-2 right-2" onClick={copyShortcut} data-testid="button-copy-safari-action-icon">
+                    {shortcutCopied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
-              </div>
+              </details>
+
+              <details className="text-sm border-t border-border pt-4">
+                <summary className="cursor-pointer text-muted-foreground">Use the older mobile bookmark method</summary>
+                <p className="text-xs text-muted-foreground mt-3 mb-2">In Safari, bookmark any page, then edit that bookmark's URL and replace it with this code. Open your ESPN league and tap the bookmark to sync.</p>
+                <Button variant="outline" onClick={copyBookmarklet} data-testid="button-copy-bookmarklet">
+                  {copied ? "Copied!" : "Copy Bookmark Code"}
+                </Button>
+                <div className="relative bg-muted rounded-md p-4 mt-3 max-h-48 overflow-auto">
+                  <code className="text-xs break-all text-muted-foreground font-mono block pr-10 select-all" data-testid="text-bookmarklet">{bookmarkletCode}</code>
+                </div>
+              </details>
             </>
           )}
         </CardContent>

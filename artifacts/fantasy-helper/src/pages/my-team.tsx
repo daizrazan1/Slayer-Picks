@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Sparkles, TrendingUp, ArrowRightLeft, List, AlertTriangle, RefreshCw } from "lucide-react";
+import { Users, Sparkles, TrendingUp, ArrowRightLeft, List, AlertTriangle, RefreshCw, CalendarDays } from "lucide-react";
 import { Link } from "wouter";
 
 // ── Color palette for player↔tip connections ─────────────────────────────────
@@ -31,6 +31,13 @@ const PRIORITY_RING: Record<string, string> = {
   high:   "text-red-400 border-red-400/40 bg-red-400/10",
   medium: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",
   low:    "text-blue-400 border-blue-400/40 bg-blue-400/10",
+};
+
+const POSITION_ORDER: Record<string, string[]> = {
+  football: ["QB", "RB", "WR", "TE", "FLEX", "D/ST", "K", "BENCH", "IR"],
+  basketball: ["PG", "SG", "SG/SF", "SF", "SF/PF", "PF", "C", "UTIL", "BENCH", "IR"],
+  baseball: ["C", "1B", "2B", "2B/SS", "3B", "1B/3B", "SS", "OF", "UTIL", "SP", "RP", "P", "BENCH", "IR"],
+  hockey: ["C", "LW", "RW", "D", "G", "UTIL", "BENCH", "IR"],
 };
 
 interface InsightTipShape {
@@ -160,9 +167,6 @@ export default function MyTeam() {
     );
   }
 
-  const starters = players?.filter((p) => !["BENCH", "IR"].includes(p.position)) ?? [];
-  const bench    = players?.filter((p) => ["BENCH", "IR"].includes(p.position)) ?? [];
-
   return (
     <div className="space-y-5">
       {/* ── Header ── */}
@@ -172,6 +176,11 @@ export default function MyTeam() {
           <p className="text-muted-foreground mt-0.5">Your roster for the current season.</p>
         </div>
         <div className="flex gap-3">
+          {(selectedLeague?.sport ?? sport) === "football" && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href="/weekly"><CalendarDays className="w-4 h-4" /> This Week</Link>
+            </Button>
+          )}
           {leagues.length > 1 && (
             <Select value={leagueId?.toString()} onValueChange={(v) => { setLeagueId(parseInt(v, 10)); setMyTeamId(null); }}>
               <SelectTrigger className="w-44 bg-card"><SelectValue placeholder="League" /></SelectTrigger>
@@ -227,8 +236,7 @@ export default function MyTeam() {
               <div className="space-y-2">{[1,2,3,4,5,6,7,8].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
             ) : players && players.length > 0 ? (
               <>
-                <RosterSection title="Starters" players={starters} sport={selectedLeague?.sport ?? sport} getPlayerTag={getPlayerTag} hasInsights={!!insights} />
-                {bench.length > 0 && <RosterSection title="Bench / IR" players={bench} sport={selectedLeague?.sport ?? sport} getPlayerTag={getPlayerTag} hasInsights={!!insights} />}
+                <RosterSection players={players} sport={selectedLeague?.sport ?? sport} getPlayerTag={getPlayerTag} hasInsights={!!insights} />
               </>
             ) : (
               <div className="text-center text-muted-foreground p-12">No players found.</div>
@@ -256,72 +264,93 @@ export default function MyTeam() {
 
 // ── Roster section with player tag highlighting ───────────────────────────────
 function RosterSection({
-  title,
   players,
   sport,
   getPlayerTag,
   hasInsights,
 }: {
-  title: string;
   players: Array<{ id: number; espnPlayerId: string; fullName: string; position: string; proTeam: string; totalPoints?: number | null; injuryStatus?: string | null }>;
   sport: string;
   getPlayerTag: (name: string) => { palette: typeof TAG_PALETTE[number]; label: string; tipIndex: number } | null;
   hasInsights: boolean;
 }) {
+  const order = POSITION_ORDER[sport] ?? [];
+  const grouped = new Map<string, typeof players>();
+  for (const player of players) {
+    const position = player.position || "Other";
+    const group = grouped.get(position) ?? [];
+    group.push(player);
+    grouped.set(position, group);
+  }
+  const groups = [...grouped.entries()]
+    .sort(([a], [b]) => {
+      const aIndex = order.indexOf(a);
+      const bIndex = order.indexOf(b);
+      if (aIndex !== bIndex) return (aIndex < 0 ? order.length : aIndex) - (bIndex < 0 ? order.length : bIndex);
+      return a.localeCompare(b);
+    });
+
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-card">
       <div className="px-4 py-2.5 bg-secondary/40 border-b border-border">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Roster by Position · {players.length} Players</h3>
       </div>
-      <div className="divide-y divide-border/50">
-        {players.map((player) => {
-          const tag = getPlayerTag(player.fullName);
-          return (
-            <div
-              key={player.id}
-              className={[
-                "flex items-center gap-3 px-3 py-2.5 transition-colors",
-                tag ? `border-l-4 ${tag.palette.border} ${tag.palette.bg}` : "border-l-4 border-l-transparent",
-              ].join(" ")}
-            >
-              {/* Position */}
-              <span className="bg-secondary text-secondary-foreground text-xs font-bold px-2 py-0.5 rounded w-16 text-center shrink-0">
-                {player.position}
-              </span>
-
-              {/* Avatar + name */}
-              <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="sm" />
-              <span className="font-medium flex-1 min-w-0 truncate">{player.fullName}</span>
-
-              {/* Pro team */}
-              <span className="text-muted-foreground uppercase text-xs font-bold tracking-wide hidden sm:block w-10 text-center shrink-0">
-                {player.proTeam}
-              </span>
-
-              {/* Points */}
-              <span className="font-mono font-bold text-primary text-sm w-12 text-right shrink-0">
-                {player.totalPoints?.toFixed(1) ?? "—"}
-              </span>
-
-              {/* Injury */}
-              {player.injuryStatus && !["ACTIVE", "NORMAL"].includes(player.injuryStatus) ? (
-                <Badge variant="destructive" className="text-xs shrink-0">{player.injuryStatus}</Badge>
-              ) : (
-                <span className="w-8 shrink-0" />
-              )}
-
-              {/* Tag badge — only shown once insights loaded */}
-              <div className="w-7 shrink-0 flex justify-end">
-                {tag && hasInsights ? (
-                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black ${tag.palette.badge}`}>
-                    {tag.label}
+      {groups.map(([position, groupPlayers]) => (
+        <div key={position}>
+          <h4 className="px-4 py-2 bg-secondary/20 border-b border-border/50 text-xs font-bold uppercase tracking-wider text-primary">
+            {position} <span className="ml-1 text-muted-foreground">({groupPlayers.length})</span>
+          </h4>
+          <div className="divide-y divide-border/50">
+            {groupPlayers.map((player) => {
+              const tag = getPlayerTag(player.fullName);
+              return (
+                <div
+                  key={player.id}
+                  className={[
+                    "flex items-center gap-3 px-3 py-2.5 transition-colors",
+                    tag ? `border-l-4 ${tag.palette.border} ${tag.palette.bg}` : "border-l-4 border-l-transparent",
+                  ].join(" ")}
+                >
+                  {/* Position */}
+                  <span className="bg-secondary text-secondary-foreground text-xs font-bold px-2 py-0.5 rounded w-16 text-center shrink-0">
+                    {player.position}
                   </span>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+
+                  {/* Avatar + name */}
+                  <PlayerAvatar espnPlayerId={player.espnPlayerId} sport={sport} name={player.fullName} size="sm" />
+                  <span className="font-medium flex-1 min-w-0 truncate">{player.fullName}</span>
+
+                  {/* Pro team */}
+                  <span className="text-muted-foreground uppercase text-xs font-bold tracking-wide hidden sm:block w-10 text-center shrink-0">
+                    {player.proTeam}
+                  </span>
+
+                  {/* Points */}
+                  <span className="font-mono font-bold text-primary text-sm w-12 text-right shrink-0">
+                    {player.totalPoints?.toFixed(1) ?? "—"}
+                  </span>
+
+                  {/* Injury */}
+                  {player.injuryStatus && !["ACTIVE", "NORMAL"].includes(player.injuryStatus) ? (
+                    <Badge variant="destructive" className="text-xs shrink-0">{player.injuryStatus}</Badge>
+                  ) : (
+                    <span className="w-8 shrink-0" />
+                  )}
+
+                  {/* Tag badge — only shown once insights loaded */}
+                  <div className="w-7 shrink-0 flex justify-end">
+                    {tag && hasInsights ? (
+                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black ${tag.palette.badge}`}>
+                        {tag.label}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

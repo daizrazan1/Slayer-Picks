@@ -2,7 +2,13 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@11.19.0",
+  "engines": { "node": ">=24 <25" },
   "scripts": {
+    "setup:local": "node scripts/setup-local.mjs",
+    "dev:local": "node scripts/dev-local.mjs",
+    "build:deploy": "pnpm --filter @workspace/fantasy-helper run build && pnpm --filter @workspace/api-server run build",
+    "start:deploy": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",

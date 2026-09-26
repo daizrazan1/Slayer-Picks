@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Trophy, ArrowRightLeft, Settings, LayoutDashboard, Menu, Users, BarChart2, List, LogOut } from "lucide-react";
+import { Activity, Trophy, ArrowRightLeft, Settings, LayoutDashboard, Menu, Users, BarChart2, List, LogOut, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/auth-context";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/my-team", label: "My Team", icon: Users },
+  { href: "/weekly", label: "Weekly Lineup", icon: CalendarDays },
   { href: "/leagues", label: "Leagues", icon: Trophy },
   { href: "/standings", label: "Standings", icon: BarChart2 },
   { href: "/trade", label: "Trade Lab", icon: ArrowRightLeft },

@@ -2,6 +2,9 @@ import { db } from "@workspace/db";
 import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { decryptEspnCredential } from "./espn-credentials";
+import { footballLineupSlot, footballPlayerPosition } from "./espn-position";
+import { getCurrentEspnWeek, getWeeklyPlayerPoints, saveCurrentMatchups, type EspnWeeklyLeague } from "./espn-weekly";
 
 export interface SyncSummary {
   leaguesSynced: number;
@@ -56,8 +59,8 @@ export async function runAutoSync(leagues: LeagueRow[]): Promise<SyncSummary> {
 }
 
 async function syncOneLeague(league: LeagueRow): Promise<{ playersSynced: number }> {
-  const s2 = league.espnS2!;
-  const swid = league.swid!;
+  const s2 = decryptEspnCredential(league.espnS2!);
+  const swid = decryptEspnCredential(league.swid!);
   const espnLeagueId = parseInt(league.espnLeagueId, 10);
   const sport = league.sport;
   const gameId = SPORT_TO_GAME_ID[sport] ?? "ffl";
@@ -79,7 +82,7 @@ async function syncOneLeague(league: LeagueRow): Promise<{ playersSynced: number
 
   for (const host of ESPN_HOSTS) {
     for (const year of years) {
-      const url = `${host}/apis/v3/games/${gameId}/seasons/${year}/segments/0/leagues/${espnLeagueId}?view=mTeam&view=mRoster&view=mSettings&view=mStandings`;
+      const url = `${host}/apis/v3/games/${gameId}/seasons/${year}/segments/0/leagues/${espnLeagueId}?view=mTeam&view=mRoster&view=mSettings&view=mStandings&view=mMatchup&view=mMatchupScore`;
       try {
         const resp = await fetch(url, { headers });
         const ct = resp.headers.get("content-type") ?? "";
@@ -100,6 +103,9 @@ async function syncOneLeague(league: LeagueRow): Promise<{ playersSynced: number
   }
 
   const teams = (data["teams"] as EspnTeam[] | undefined) ?? [];
+  const weeklyData = data as EspnWeeklyLeague;
+  const currentWeek = sport === "football" ? getCurrentEspnWeek(weeklyData) : null;
+  const seasonId = typeof data["seasonId"] === "number" ? data["seasonId"] : league.season;
   let playersSynced = 0;
 
   for (const espnTeam of teams) {
@@ -140,11 +146,17 @@ async function syncOneLeague(league: LeagueRow): Promise<{ playersSynced: number
           teamId: dbTeamId,
           espnPlayerId: String(player.id ?? ""),
           fullName: player.fullName ?? `Player ${player.id}`,
-          position: getPositionName(entry.lineupSlotId ?? 0, sport),
+          position: sport === "football"
+            ? footballPlayerPosition(player.defaultPositionId) ?? getPositionName(entry.lineupSlotId ?? 0, sport)
+            : getPositionName(entry.lineupSlotId ?? 0, sport),
+          lineupSlot: sport === "football"
+            ? footballLineupSlot(entry.lineupSlotId)
+            : entry.lineupSlotId == null ? null : getPositionName(entry.lineupSlotId, sport),
           proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
-          projectedPoints: null,
+          projectedPoints: getWeeklyPlayerPoints(player.stats, currentWeek, 1, seasonId),
+          weeklyPoints: getWeeklyPlayerPoints(player.stats, currentWeek, 0, seasonId),
           avgPoints: null,
-          totalPoints: getSeasonTotal(player.stats) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
+          totalPoints: getSeasonTotal(player.stats, seasonId) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
           injuryStatus: player.injuryStatus ?? null,
         };
       })
@@ -155,6 +167,8 @@ async function syncOneLeague(league: LeagueRow): Promise<{ playersSynced: number
       playersSynced += playerRows.length;
     }
   }
+
+  if (sport === "football") await saveCurrentMatchups(league.id, weeklyData);
 
   return { playersSynced };
 }
@@ -171,6 +185,7 @@ interface EspnStatEntry {
   appliedTotal?: number;
   scoringPeriodId?: number;
   seasonId?: number;
+  statSourceId?: number;
   statSplitTypeId?: number;
 }
 
@@ -182,15 +197,17 @@ interface EspnRosterEntry {
       id?: number;
       fullName?: string;
       proTeamId?: number;
+      defaultPositionId?: number;
       injuryStatus?: string;
       stats?: EspnStatEntry[];
     };
   };
 }
 
-function getSeasonTotal(stats?: EspnStatEntry[]): number | null {
+function getSeasonTotal(stats: EspnStatEntry[] | undefined, seasonId: number): number | null {
   if (!stats || stats.length === 0) return null;
-  const entry = stats.find(s => s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
+  const entry = stats.find(s => s.seasonId === seasonId && s.statSourceId === 0 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0)
+    ?? stats.find(s => s.seasonId == null && s.statSourceId === 0 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
   return entry?.appliedTotal ?? null;
 }
 

@@ -1,19 +1,20 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { leaguesTable, teamsTable, playersTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { leaguesTable, teamsTable, playersTable, waiverPlayersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
 import { enrichLeaguePlayers } from "../lib/espn-public";
+import { footballLineupSlot, footballPlayerPosition } from "../lib/espn-position";
+import { getCurrentEspnWeek, getWeeklyPlayerPoints, saveCurrentMatchups, type EspnWeeklyLeague } from "../lib/espn-weekly";
 const router: IRouter = Router();
 
 router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
-  const body = req.body as { sport?: unknown; leagueId?: unknown; espnData?: unknown; swid?: unknown; s2?: unknown };
+  const body = req.body as { sport?: unknown; leagueId?: unknown; teamId?: unknown; espnData?: unknown; waiverData?: unknown; waiverError?: unknown };
 
   const sport = typeof body.sport === "string" ? body.sport : "basketball";
   const leagueId = typeof body.leagueId === "number" ? body.leagueId : parseInt(String(body.leagueId ?? ""), 10);
   const espnData = body.espnData as Record<string, unknown> | undefined;
-  const swid = typeof body.swid === "string" ? body.swid.trim() : "";
-  const s2 = typeof body.s2 === "string" ? body.s2.trim() : "";
+  const ownerTeamId = typeof body.teamId === "number" ? body.teamId : parseInt(String(body.teamId ?? ""), 10);
   const userId = req.session.userId!;
 
   if (!leagueId || isNaN(leagueId)) {
@@ -24,17 +25,34 @@ router.post("/sync-espn-push", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "espnData is required" });
     return;
   }
+  if (Number(espnData.id) !== leagueId) {
+    res.status(400).json({ error: "ESPN league ID does not match the imported data" });
+    return;
+  }
 
   req.log.info({ leagueId, sport }, "Processing browser-pushed ESPN data");
 
   try {
-    const result = await processEspnData(espnData, leagueId, sport, userId, swid, s2);
+    const result = await processEspnData(espnData, leagueId, sport, userId, ownerTeamId);
+    let waiverPlayersSynced: number | null = null;
+    let waiverError = typeof body.waiverError === "string" ? body.waiverError.slice(0, 200) : null;
+    if (Array.isArray(body.waiverData)) {
+      try {
+        waiverPlayersSynced = await replaceWaiverPlayers(result.dbLeagueId, body.waiverData.slice(0, 250), sport, result.seasonId);
+      } catch (error) {
+        waiverError = "Available players could not be imported. Your roster was updated.";
+        req.log.error({ err: error }, "Waiver player import failed");
+      }
+    }
 
     res.json({
       success: true,
-      message: `Synced ${result.leaguesSynced} league(s) and ${result.playersSynced} players`,
+      message: `Synced ${result.leaguesSynced} league(s), ${result.playersSynced} rostered players${waiverPlayersSynced === null ? "" : `, ${waiverPlayersSynced} available players`}, and ${result.matchupsSynced} current matchups`,
       leaguesSynced: result.leaguesSynced,
       playersSynced: result.playersSynced,
+      waiverPlayersSynced,
+      matchupsSynced: result.matchupsSynced,
+      waiverError,
       lastSyncAt: new Date().toISOString(),
     });
     enrichLeaguePlayers(result.dbLeagueId, sport).catch((err: unknown) => {
@@ -51,10 +69,11 @@ async function processEspnData(
   leagueId: number,
   sport: string,
   userId: number,
-  swid: string = "",
-  s2: string = ""
-): Promise<{ leaguesSynced: number; playersSynced: number; dbLeagueId: number }> {
+  ownerTeamId: number
+): Promise<{ leaguesSynced: number; playersSynced: number; dbLeagueId: number; matchupsSynced: number; seasonId: number }> {
   const teams = (raw["teams"] as EspnTeamData[] | undefined) ?? [];
+  const weeklyData = raw as EspnWeeklyLeague;
+  const currentWeek = sport === "football" ? getCurrentEspnWeek(weeklyData) : null;
   const settings = raw["settings"] as { name?: string } | undefined;
   const seasonId = (raw["seasonId"] as number | undefined) ?? new Date().getFullYear();
 
@@ -72,9 +91,6 @@ async function processEspnData(
       .update(leaguesTable)
       .set({
         name: leagueName, season: seasonId, teamCount: teams.length, syncedAt: new Date(),
-        autoSyncEnabled: true,
-        ...(s2 ? { espnS2: s2 } : {}),
-        ...(swid ? { swid } : {}),
       })
       .where(eq(leaguesTable.id, existing.id));
     dbLeagueId = existing.id;
@@ -89,9 +105,7 @@ async function processEspnData(
         sport,
         teamCount: teams.length,
         syncedAt: new Date(),
-        autoSyncEnabled: true,
-        ...(s2 ? { espnS2: s2 } : {}),
-        ...(swid ? { swid } : {}),
+        autoSyncEnabled: false,
       })
       .returning();
     dbLeagueId = inserted!.id;
@@ -111,7 +125,7 @@ async function processEspnData(
       );
 
     let dbTeamId: number;
-    const isOwnerTeam = !!(swid && espnTeam.primaryOwner && espnTeam.primaryOwner === swid);
+    const isOwnerTeam = ownerTeamId > 0 ? espnTeam.id === ownerTeamId : existingTeam?.isOwnerTeam ?? false;
     const teamData = {
       leagueId: dbLeagueId,
       espnTeamId: String(espnTeam.id ?? ""),
@@ -146,11 +160,17 @@ async function processEspnData(
           teamId: dbTeamId,
           espnPlayerId: String(player.id ?? ""),
           fullName: player.fullName ?? `Player ${player.id}`,
-          position: getPositionName(entry.lineupSlotId ?? 0, sport),
+          position: sport === "football"
+            ? footballPlayerPosition(player.defaultPositionId) ?? getPositionName(entry.lineupSlotId ?? 0, sport)
+            : getPositionName(entry.lineupSlotId ?? 0, sport),
+          lineupSlot: sport === "football"
+            ? footballLineupSlot(entry.lineupSlotId)
+            : entry.lineupSlotId == null ? null : getPositionName(entry.lineupSlotId, sport),
           proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
-          projectedPoints: null,
+          projectedPoints: getWeeklyPlayerPoints(player.stats, currentWeek, 1, seasonId),
+          weeklyPoints: getWeeklyPlayerPoints(player.stats, currentWeek, 0, seasonId),
           avgPoints: null,
-          totalPoints: getSeasonTotal(player.stats) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
+          totalPoints: getSeasonTotal(player.stats, seasonId) ?? entry.playerPoolEntry?.appliedStatTotal ?? null,
           injuryStatus: player.injuryStatus ?? null,
         };
       })
@@ -162,7 +182,68 @@ async function processEspnData(
     }
   }
 
-  return { leaguesSynced: 1, playersSynced, dbLeagueId };
+  const matchupsSynced = sport === "football" ? await saveCurrentMatchups(dbLeagueId, weeklyData) : 0;
+  return { leaguesSynced: 1, playersSynced, dbLeagueId, matchupsSynced, seasonId };
+}
+
+interface EspnWaiverEntry {
+  id?: number;
+  onTeamId?: number;
+  status?: string;
+  player?: {
+    id?: number; fullName?: string; defaultPositionId?: number; proTeamId?: number;
+    injuryStatus?: string; stats?: Array<EspnStatEntry & { statSourceId?: number }>;
+    ownership?: { percentOwned?: number; percentStarted?: number };
+  };
+  playerPoolEntry?: {
+    player?: EspnWaiverEntry["player"];
+    status?: string;
+    ownership?: { percentOwned?: number; percentStarted?: number };
+    appliedStatTotal?: number;
+  };
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function playerPosition(positionId: number | undefined, sport: string): string {
+  if (sport === "football") {
+    return footballPlayerPosition(positionId) ?? "Other";
+  }
+  return String(positionId ?? "Other");
+}
+
+async function replaceWaiverPlayers(leagueId: number, entries: EspnWaiverEntry[], sport: string, seasonId: number): Promise<number> {
+  const seen = new Set<string>();
+  const syncedAt = new Date();
+  const rows = entries.flatMap((entry) => {
+    const player = entry.player ?? entry.playerPoolEntry?.player;
+    const id = player?.id ?? entry.id;
+    if (!id || !player?.fullName || seen.has(String(id)) || (entry.onTeamId ?? 0) > 0) return [];
+    seen.add(String(id));
+    const projected = player.stats?.find(s => s.statSourceId === 1 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
+    return [{
+      leagueId,
+      espnPlayerId: String(id),
+      fullName: player.fullName,
+      position: playerPosition(player.defaultPositionId, sport),
+      proTeam: getProTeamAbbrev(player.proTeamId ?? 0, sport),
+      availability: (entry.status ?? entry.playerPoolEntry?.status) === "WAIVERS" ? "WAIVERS" : "FREEAGENT",
+      percentOwned: finiteNumber(player.ownership?.percentOwned ?? entry.playerPoolEntry?.ownership?.percentOwned),
+      percentStarted: finiteNumber(player.ownership?.percentStarted ?? entry.playerPoolEntry?.ownership?.percentStarted),
+      projectedPoints: finiteNumber(projected?.appliedTotal),
+      totalPoints: finiteNumber(getSeasonTotal(player.stats, seasonId) ?? entry.playerPoolEntry?.appliedStatTotal),
+      injuryStatus: player.injuryStatus ?? null,
+      syncedAt,
+    }];
+  });
+  if (entries.length > 0 && rows.length === 0) throw new Error("ESPN available player format was not recognized");
+  await db.transaction(async (tx) => {
+    await tx.delete(waiverPlayersTable).where(eq(waiverPlayersTable.leagueId, leagueId));
+    if (rows.length) await tx.insert(waiverPlayersTable).values(rows);
+  });
+  return rows.length;
 }
 
 interface EspnTeamData {
@@ -187,6 +268,7 @@ interface EspnStatEntry {
   appliedTotal?: number;
   scoringPeriodId?: number;
   seasonId?: number;
+  statSourceId?: number;
   statSplitTypeId?: number;
 }
 
@@ -199,15 +281,17 @@ interface EspnRosterEntry {
       id?: number;
       fullName?: string;
       proTeamId?: number;
+      defaultPositionId?: number;
       injuryStatus?: string;
       stats?: EspnStatEntry[];
     };
   };
 }
 
-function getSeasonTotal(stats?: EspnStatEntry[]): number | null {
+function getSeasonTotal(stats: EspnStatEntry[] | undefined, seasonId: number): number | null {
   if (!stats || stats.length === 0) return null;
-  const entry = stats.find(s => s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
+  const entry = stats.find(s => s.seasonId === seasonId && s.statSourceId === 0 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0)
+    ?? stats.find(s => s.seasonId == null && s.statSourceId === 0 && s.statSplitTypeId === 0 && s.scoringPeriodId === 0);
   return entry?.appliedTotal ?? null;
 }
 

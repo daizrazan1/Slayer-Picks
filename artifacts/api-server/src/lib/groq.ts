@@ -7,8 +7,8 @@ import { logger } from "./logger";
 import { formatStatLine } from "./espn-public";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL_FAST = "llama-3.1-8b-instant";
-const MODEL_SMART = "llama-3.3-70b-versatile";
+const MODEL_FAST = "openai/gpt-oss-20b";
+const MODEL_SMART = "openai/gpt-oss-120b";
 
 export function hashPrompt(prompt: string): string {
   return createHash("sha256").update(prompt).digest("hex");
@@ -43,6 +43,9 @@ async function callGroq(
       ],
       temperature: opts.temperature ?? 0.3,
       max_tokens: opts.maxTokens ?? 600,
+      reasoning_effort: "low",
+      reasoning_format: "hidden",
+      response_format: { type: "json_object" },
     }),
   });
 
@@ -179,7 +182,7 @@ Return ONLY this JSON (no markdown):
   }
 
   logger.info({ promptHash }, "Calling Groq AI for trade evaluation");
-  const rawResponse = await callGroq(prompt, { model: MODEL_SMART, maxTokens: 800, temperature: 0.3 });
+  const rawResponse = await callGroq(prompt, { model: MODEL_SMART, maxTokens: 1200, temperature: 0.3 });
 
   let parsed: { winScoreA: number; winScoreB: number; analysis: string; recommendation: string };
   try {

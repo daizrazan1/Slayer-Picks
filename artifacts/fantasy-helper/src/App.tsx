@@ -16,6 +16,7 @@ import TradeLab from "./pages/trade";
 import MyTeam from "./pages/my-team";
 import Standings from "./pages/standings";
 import WaiverWire from "./pages/waiver-wire";
+import Weekly from "./pages/weekly";
 import Landing from "./pages/landing";
 import Login from "./pages/login";
 import Register from "./pages/register";
@@ -66,6 +67,7 @@ function AppRoutes() {
             <Switch>
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/my-team" component={MyTeam} />
+              <Route path="/weekly" component={Weekly} />
               <Route path="/leagues" component={Leagues} />
               <Route path="/leagues/:id" component={LeagueDetail} />
               <Route path="/standings" component={Standings} />
