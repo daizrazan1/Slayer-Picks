@@ -8,8 +8,8 @@ The root `render.yaml` defines one Render web service on the Free plan. Connect 
 
 | Setting | Value |
 | --- | --- |
-| Install | `corepack enable && pnpm install --frozen-lockfile` |
-| Build | `pnpm run build:deploy` |
+| Install | `corepack pnpm install --frozen-lockfile` |
+| Build | `corepack pnpm run build:deploy` |
 | Start | `pnpm run start:deploy` |
 | Health check | `/api/healthz` |
 | Runtime | Node.js 24 |
